@@ -1,0 +1,64 @@
+name: Deploy to GitHub Pages
+
+# Publishes this repository to GitHub Pages. The configure-pages step enables
+# Pages on first run, so there is no repository setting to change by hand.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the timetable
+        run: |
+          python3 - <<'PY'
+          import json, re
+          TIME = re.compile(r"[0-2]\d:[0-5]\d")
+          ORDER = ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"]
+          data = json.load(open("data/timetable.json", encoding="utf-8"))
+          days = data["days"]
+          assert days, "timetable has no days"
+
+          def minutes(value):
+              return int(value[:2]) * 60 + int(value[3:])
+
+          for key, entry in sorted(days.items()):
+              assert re.fullmatch(r"\d{2}-\d{2}", key), f"bad day key {key}"
+              times = {k: v for k, v in entry.items() if k not in ("hijri", "jamaah")}
+              for prayer, value in times.items():
+                  assert TIME.fullmatch(value), f"bad time {key} {prayer}={value}"
+              present = [p for p in ORDER if p in times]
+              values = [minutes(times[p]) for p in present]
+              assert values == sorted(values), f"prayers out of order on {key}: {times}"
+              for prayer, value in entry.get("jamaah", {}).items():
+                  assert TIME.fullmatch(value), f"bad jamaah time {key} {prayer}={value}"
+                  gap = minutes(value) - minutes(times[prayer])
+                  assert 0 <= gap <= 120, f"jamaah {key} {prayer} is {gap} min from begins"
+          print(f"Validated {len(days)} days")
+          PY
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4

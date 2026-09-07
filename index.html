@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azan</title>
+<meta name="theme-color" content="#0d1512">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Azan">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#0d1512; --panel:#131f1a; --panel-2:#182821; --line:#24382e;
+  --text:#e8f2ec; --muted:#8fa79a; --accent:#3ddc97; --accent-dim:#1f7a56;
+  --warn:#ffb020; --danger:#ff5c5c; --radius:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text); font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  overscroll-behavior-y:contain;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+.wrap{max-width:560px;margin:0 auto;padding:12px 14px 96px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px 12px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.2px}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.loc{font-size:12px;color:var(--muted);text-align:right;line-height:1.3}
+.banner{border-radius:var(--radius);padding:11px 13px;font-size:13px;margin-bottom:12px;display:none}
+.banner.show{display:block}
+.banner.sample{background:#3a1f10;border:1px solid #a35a17;color:#ffd8a8}
+.banner.info{background:#152a22;border:1px solid var(--accent-dim);color:#bfe8d4}
+.banner.audio{background:#10283a;border:1px solid #1d5a86;color:#bfe3ff;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.banner button{background:var(--accent);color:#07120d;font-weight:700;border-radius:9px;padding:7px 12px;font-size:13px;white-space:nowrap}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}
+.next{text-align:center;padding:22px 16px 20px;background:linear-gradient(160deg,#16281f,#111c17)}
+.next .lbl{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.next .name{font-size:34px;font-weight:700;margin:6px 0 2px}
+.next .at{font-size:19px;color:var(--accent);font-variant-numeric:tabular-nums}
+.next .cd{margin-top:12px;font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.next .cd small{font-size:14px;color:var(--muted);font-weight:600;letter-spacing:.1em;display:block;margin-top:4px}
+.datebar{display:flex;justify-content:space-between;align-items:baseline;margin:2px 4px 10px;font-size:13px;color:var(--muted)}
+.datebar b{color:var(--text);font-size:15px}
+ul.times{list-style:none;margin:0;padding:0}
+ul.times li{display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--line)}
+ul.times li:last-child{border-bottom:0}
+ul.times li.passed{opacity:.42}
+ul.times li.current{background:rgba(61,220,151,.09);border-radius:10px;padding-left:10px;padding-right:10px}
+ul.times li.passed.current{opacity:1}
+ul.times li.current .ptime{color:var(--accent)}
+ul.times li.sun{opacity:.6}
+.pname{flex:1;font-weight:600;min-width:0}
+.pname span{display:block;font-size:11px;color:var(--muted);font-weight:500}
+.ptime{font-variant-numeric:tabular-nums;font-size:19px;font-weight:600;min-width:76px;text-align:right}
+.jtime{font-variant-numeric:tabular-nums;font-size:17px;font-weight:600;color:var(--accent);min-width:76px;text-align:right}
+ul.times li.hdr{padding:4px 4px 8px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);font-weight:700}
+ul.times li.hdr .ptime,ul.times li.hdr .jtime{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.1em}
+.hijri{color:var(--accent);font-size:13px}
+.jummah{background:linear-gradient(160deg,#1a2e24,#132019);border:1px solid var(--accent-dim)}
+.jummah .k{font-weight:600}
+.seg{display:flex;gap:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{flex:1;padding:6px 10px;font-size:12px;border-radius:7px;color:var(--muted);font-weight:600}
+.seg button.on{background:var(--accent);color:#07120d}
+.picon{width:26px;text-align:center;font-size:15px;opacity:.85}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(13,21,18,.94);backdrop-filter:blur(12px);
+  border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;padding:12px 4px 14px;font-size:11px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:4px}
+nav.tabs button i{font-style:normal;font-size:19px;line-height:1}
+nav.tabs button.on{color:var(--accent)}
+.view{display:none}.view.on{display:block}
+h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:20px 4px 8px;font-weight:700}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .k{font-size:15px}
+.row .k small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.35}
+select,input[type=text],input[type=number],textarea{
+  background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0}
+select{min-width:104px}
+input[type=number]{width:76px;text-align:center}
+textarea{width:100%;min-height:150px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
+.btn{background:var(--accent);color:#07120d;font-weight:700;border-radius:11px;padding:11px 15px;font-size:14px}
+.btn.sec{background:var(--panel-2);color:var(--text);border:1px solid var(--line)}
+.btn.warn{background:#3a1516;color:#ffb4b4;border:1px solid #6d2222}
+.btn.block{display:block;width:100%;margin-top:10px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.sw{position:relative;width:50px;height:29px;flex:0 0 auto}
+.sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0}
+.sw span{position:absolute;inset:0;background:var(--panel-2);border:1px solid var(--line);border-radius:999px;transition:.15s}
+.sw span:after{content:"";position:absolute;width:21px;height:21px;border-radius:50%;background:#7d9a8c;top:3px;left:3px;transition:.15s}
+.sw input:checked + span{background:var(--accent-dim);border-color:var(--accent)}
+.sw input:checked + span:after{background:var(--accent);transform:translateX(21px)}
+table.month{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+table.month th{text-align:right;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 4px;border-bottom:1px solid var(--line);font-weight:700}
+table.month th:first-child{text-align:left}
+table.month td{padding:8px 4px;text-align:right;border-bottom:1px solid rgba(36,56,46,.5)}
+table.month td:first-child{text-align:left;color:var(--muted)}
+table.month tr.today{background:rgba(61,220,151,.1)}
+table.month tr.today td{color:var(--text);font-weight:700}
+table.month tr.fri td:first-child{color:var(--accent)}
+.mnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.mnav button{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:7px 13px;font-size:16px}
+.mnav b{font-size:15px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.note{font-size:12px;color:var(--muted);line-height:1.5;margin:8px 2px 0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;background:#1d3b2d;border:1px solid var(--accent-dim);
+  color:var(--text);padding:10px 16px;border-radius:11px;font-size:13px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88vw;text-align:center}
+.toast.show{opacity:1}
+.pill{font-size:11px;padding:3px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="dot"></span> Azan</div>
+    <div class="loc" id="locBox">—</div>
+  </header>
+
+  <div class="banner sample" id="sampleBanner">
+    <b>Sample timetable — do not pray by these times.</b><br>
+    Import your own timetable in Settings → Timetable.
+  </div>
+  <div class="banner info" id="coverBanner"></div>
+  <div class="banner audio" id="audioBanner">
+    <span>Tap once to allow the Azan to play.</span>
+    <button id="unlockBtn">Enable sound</button>
+  </div>
+
+  <!-- TODAY -->
+  <section class="view on" id="v-today">
+    <div class="card next">
+      <div class="lbl">Next</div>
+      <div class="name" id="nextName">—</div>
+      <div class="at" id="nextAt">—</div>
+      <div class="cd" id="countdown">--:--:--</div>
+      <small id="cdLabel">remaining</small>
+    </div>
+    <div class="datebar"><b id="todayDate">—</b><span class="hijri" id="todayHijri"></span></div>
+    <div class="card"><ul class="times" id="todayList"></ul></div>
+    <div class="card jummah" id="jummahCard" style="display:none">
+      <div class="row" style="border:0;padding:0 0 8px"><div class="k">Jummah — first khutba</div><span class="ptime" id="jum1">—</span></div>
+      <div class="row" style="border:0;padding:0"><div class="k">Jummah — second khutba</div><span class="ptime" id="jum2">—</span></div>
+    </div>
+    <p class="note" id="mosqueNotes"></p>
+    <p class="note" id="foregroundNote"></p>
+  </section>
+
+  <!-- MONTH -->
+  <section class="view" id="v-month">
+    <div class="card">
+      <div class="mnav">
+        <button id="prevM">‹</button><b id="mLabel">—</b><button id="nextM">›</button>
+      </div>
+      <div class="seg" id="monthSeg" style="margin-bottom:10px">
+        <button data-col="begins" class="on">Begins</button>
+        <button data-col="jamaah">Jamaah</button>
+      </div>
+      <div class="scroll"><table class="month" id="monthTable"></table></div>
+      <p class="note">Begins times include your per-prayer adjustments from Settings. Jamaah times are shown exactly as the mosque publishes them.</p>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="v-settings">
+    <h2>Sound per prayer</h2>
+    <div class="card" id="soundRows"></div>
+
+    <h2>Adjustments (minutes)</h2>
+    <div class="card" id="offsetRows"></div>
+
+    <h2>Alerts</h2>
+    <div class="card">
+      <div class="row">
+        <div class="k">Notifications
+          <small id="notifState">Shows a banner at prayer time while the app is running.</small>
+        </div>
+        <button class="btn sec" id="notifBtn">Enable</button>
+      </div>
+      <div class="row">
+        <div class="k">Pre-prayer reminder<small>Minutes before. 0 = off.</small></div>
+        <input type="number" id="preMins" min="0" max="60" step="1">
+      </div>
+      <div class="row">
+        <div class="k">Jamaah reminder<small>Minutes before the jamaah time. 0 = off.</small></div>
+        <input type="number" id="jamMins" min="0" max="60" step="1">
+      </div>
+      <div class="row">
+        <div class="k">Keep screen awake<small>Stops the phone sleeping while the app is open.</small></div>
+        <label class="sw"><input type="checkbox" id="wakeLock"><span></span></label>
+      </div>
+      <div class="row">
+        <div class="k">24-hour clock</div>
+        <label class="sw"><input type="checkbox" id="use24"><span></span></label>
+      </div>
+    </div>
+
+    <h2>Azan audio</h2>
+    <div class="card">
+      <div class="row">
+        <div class="k">Current<small id="audioState">—</small></div>
+        <button class="btn sec" id="testBtn">Test</button>
+      </div>
+      <div class="btns">
+        <label class="btn sec" for="audioFile">Choose audio file…</label>
+        <input type="file" id="audioFile" accept="audio/*" hidden>
+        <button class="btn sec" id="audioReset">Reset</button>
+        <button class="btn sec" id="stopBtn">Stop playback</button>
+      </div>
+      <p class="note">The file is stored on this device only. No audio is bundled with the app for licensing reasons — without one, a short chime is played.</p>
+    </div>
+
+    <h2>Timetable</h2>
+    <div class="card">
+      <div class="row">
+        <div class="k">Loaded<small id="ttState">—</small></div>
+        <span class="pill" id="ttDays">0 days</span>
+      </div>
+      <p class="note">Paste your timetable below (CSV, TSV, or copied from a PDF/webpage). One row per day: a date, then Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha. A header row is used if present.</p>
+      <textarea id="importText" placeholder="Date,Fajr,Sunrise,Dhuhr,Asr,Maghrib,Isha&#10;1 Jan,06:29,08:06,12:06,14:00,16:02,17:32&#10;2 Jan,06:29,08:06,12:07,14:01,16:03,17:33"></textarea>
+      <div class="row" style="border:0;padding-top:10px">
+        <div class="k">If rows show a day number only</div>
+        <select id="defMonth"></select>
+      </div>
+      <div class="row" style="border:0;padding-top:0">
+        <div class="k">Columns<small>Two times per prayer = begins + jamaah.</small></div>
+        <select id="colMode">
+          <option value="auto">Auto-detect</option>
+          <option value="begins">Begins only</option>
+          <option value="pairs">Begins + jamaah</option>
+        </select>
+      </div>
+      <div class="row" style="border:0;padding-top:0">
+        <div class="k">Numeric date order</div>
+        <select id="dateOrder"><option value="dmy">DD/MM</option><option value="mdy">MM/DD</option></select>
+      </div>
+      <div class="btns">
+        <button class="btn" id="importBtn">Import</button>
+        <label class="btn sec" for="importFile">Import file…</label>
+        <input type="file" id="importFile" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" hidden>
+        <button class="btn sec" id="exportBtn">Export JSON</button>
+        <button class="btn warn" id="resetTT">Reset to bundled</button>
+      </div>
+      <p class="note" id="importLog"></p>
+    </div>
+
+    <h2>Location label</h2>
+    <div class="card">
+      <div class="row"><div class="k">Mosque</div><input type="text" id="metaName" placeholder="e.g. Shaheed Bilal Masjid"></div>
+      <div class="row"><div class="k">Area</div><input type="text" id="metaCity" placeholder="e.g. Dublin 15"></div>
+      <div class="row"><div class="k">Time zone<small>IANA name. Blank = device time zone.</small></div><input type="text" id="metaTz" placeholder="Europe/Dublin"></div>
+      <button class="btn sec block" id="saveMeta">Save</button>
+    </div>
+
+    <h2>About</h2>
+    <div class="card">
+      <p class="note" style="margin-top:0">
+        Times come from the timetable you import — nothing is calculated or fetched. Accuracy is the accuracy of your table.<br><br>
+        <b>Background limits:</b> a web app cannot schedule alarms while it is closed. The Azan plays and notifications fire only while this app is open (foreground, or a recent background tab on Android). For a guaranteed alarm with the screen off, use your phone's clock/alarm app alongside this one.
+      </p>
+      <div class="row"><div class="k">Version</div><span class="pill" id="verPill">—</span></div>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs">
+  <button data-v="today" class="on"><i>🕌</i>Today</button>
+  <button data-v="month"><i>📅</i>Month</button>
+  <button data-v="settings"><i>⚙️</i>Settings</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
