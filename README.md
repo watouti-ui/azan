@@ -1,7 +1,8 @@
 # Azan — prayer times from your own timetable
 
-A self-contained web app (PWA) that shows your prayer timetable, counts down to
-the next prayer, and plays the Azan when the time arrives. Installs to an iPhone
+A self-contained web app (PWA) laid out like the mosque's own display board:
+adhan and iqamah columns, live clock, Hijri date, and the Azan played when the
+time arrives. Installs to an iPhone
 or Android home screen and works offline. No account, no server, no tracking.
 
 **Times are never calculated or fetched.** The app shows exactly what is in the
@@ -11,21 +12,21 @@ timetable you import — its accuracy is the accuracy of your table.
 
 ## 1. Run it on your phone
 
-**Option A — GitHub Pages (this repository).** Static hosting over HTTPS, which
-is what installability and offline mode require.
+**Option A — GitHub Pages (recommended).** Static hosting over HTTPS, which is
+what installability and offline mode require.
 
-The `pages` workflow publishes the repository root on every push to `main`. It
-runs `actions/configure-pages` with `enablement: true`, so it switches Pages on
-itself the first time — no repository setting to change by hand.
+1. Push this folder to the repository.
+2. The `azan-pages` workflow publishes `azan/` on every push to `main`. It runs
+   `actions/configure-pages` with `enablement: true`, so it switches Pages on
+   itself the first time — no repository setting to change by hand.
+3. Open `https://<user>.github.io/<repo>/` on the phone.
+4. iPhone: Share → **Add to Home Screen**. Android: menu → **Install app**.
 
-1. Open **https://watouti-ui.github.io/azan/** on the phone.
-2. iPhone: Share → **Add to Home Screen**. Android: menu → **Install app**.
+On a public repository this makes the app publicly reachable at that URL. On a
+private repository, Pages needs a paid plan.
 
-This repository is public, so that URL is reachable by anyone who has it. It
-contains the app and the mosque's published timetable, nothing else.
-
-**Option B — any static host.** Netlify Drop, Cloudflare Pages, Vercel: drag
-this folder in. Must be HTTPS.
+**Option B — any static host.** Netlify Drop, Cloudflare Pages, Vercel: drag the
+`azan/` folder in. Must be HTTPS.
 
 **Option C — one self-contained file.**
 
@@ -42,7 +43,7 @@ build above is the one to deploy properly.
 **Option D — local, for testing only.**
 
 ```bash
-python3 -m http.server 8080
+cd azan && python3 -m http.server 8080
 ```
 
 Open `http://localhost:8080`. Reaching it from a phone over your LAN IP works,
@@ -152,7 +153,7 @@ add one, a short chime plays.
 
 - **Per device:** Settings → Azan audio → *Choose audio file…*. Stored locally
   in the browser (IndexedDB), never uploaded.
-- **For everyone:** drop an `azan.mp3` into `audio/`, add it to the `ASSETS`
+- **For everyone:** drop an `azan.mp3` into `azan/audio/`, add it to the `ASSETS`
   list in `sw.js`, and bump the `CACHE` version.
 
 Phones block audio until the user has interacted with the page: tap **Enable
@@ -167,6 +168,8 @@ Works:
 - Today's six times in **begins** and **jamaah** columns, next-prayer countdown,
   current prayer highlighted, Hijri date from the timetable
 - Jummah khutba times shown on Fridays; mosque notes shown under the list
+- Follows the board's conventions: the Hijri date rolls at Maghrib, and after
+  Isha the table switches to tomorrow, tagged as such
 - Full month table, any month, switchable between begins and jamaah
 - Azan or chime per prayer, individually settable
 - Per-prayer adjustment of −60 to +60 minutes (begins times only — jamaah times

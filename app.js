@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.2.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -16,6 +16,30 @@ const KEYS = PRAYERS.map(p => p.k);
 const PM_KEYS = new Set(['dhuhr', 'asr', 'maghrib', 'isha']);
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Short forms for the Hijri months, matched loosely against whatever spelling
+// the timetable uses.
+const HIJRI_SHORT = [
+  [/muharram/i, 'Muh'], [/safar/i, 'Saf'],
+  [/rabi.*(awwal|i\b|1)/i, 'Rab I'], [/rabi.*(akhir|thani|ii\b|2)/i, 'Rab II'],
+  [/jumada.*(ula|awwal|i\b|1)/i, 'Jum I'], [/jumada.*(akhir|thani|ii\b|2)/i, 'Jum II'],
+  [/rajab/i, 'Raj'], [/sha.?ban/i, 'Sha'], [/ramad/i, 'Ram'], [/shaww/i, 'Shw'],
+  [/qa.?d/i, 'Qad'], [/hijj/i, 'Hij']
+];
+
+function hijriParts(text) {
+  if (!text) return null;
+  const day = (String(text).match(/\d{1,2}/) || [''])[0];
+  let month = String(text).replace(/\d+/g, '').trim();
+  for (const [re, short] of HIJRI_SHORT) if (re.test(month)) { month = short; break; }
+  return { day: day, month: month };
+}
+
+function addDays(t, n) {
+  const d = new Date(Date.UTC(t.y, t.m - 1, t.d + n));
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
+}
 
 const ALIASES = {
   fajr: ['fajr','fajir','fejr','fadjr','subh','sobh','subuh','sahar','dawn'],
@@ -526,8 +550,7 @@ function coveredMonths() {
 function renderHeader() {
   const meta = (timetable && timetable.meta) || {};
   document.getElementById('locBox').innerHTML =
-    (meta.name || 'No location set') + '<br>' +
-    (meta.city ? meta.city + ' · ' : '') + zoneName();
+    '<b>' + (meta.name || 'No mosque set') + '</b>' + (meta.city ? ' · ' + meta.city : '');
   document.getElementById('sampleBanner').classList.toggle('show', !!meta.placeholder);
   document.getElementById('verPill').textContent = APP_VERSION;
 
@@ -543,43 +566,62 @@ function renderHeader() {
 }
 
 function renderToday() {
-  const t = todayInZone();
   const now = Date.now();
-  const weekday = new Date(Date.UTC(t.y, t.m - 1, t.d)).getUTCDay();
-  const events = eventsFor(t.y, t.m, t.d);
-  const entry = dayEntry(t.m, t.d);
+  const t = todayInZone();
   const meta = (timetable && timetable.meta) || {};
+  const todayEvents = eventsFor(t.y, t.m, t.d);
+  const isha = todayEvents.find(e => e.key === 'isha');
+  const maghrib = todayEvents.find(e => e.key === 'maghrib');
+
+  // The mosque's own board rolls the Hijri date at Maghrib and switches the
+  // table to tomorrow after Isha. Match both.
+  const rolledHijri = maghrib && now >= maghrib.at ? addDays(t, 1) : t;
+  const showTomorrow = !!(isha && now >= isha.at);
+  const shown = showTomorrow ? addDays(t, 1) : t;
+  const events = showTomorrow ? eventsFor(shown.y, shown.m, shown.d) : todayEvents;
+
+  document.getElementById('todayDate').innerHTML =
+    MONTHS_SHORT[t.m - 1] + '<b>' + t.d + '</b>' + t.y;
+
+  const hijri = hijriParts((dayEntry(rolledHijri.m, rolledHijri.d) || {}).hijri);
+  document.getElementById('todayHijri').innerHTML = hijri
+    ? hijri.month + '<b>' + hijri.day + '</b>' + (meta.hijriYear || '')
+    : '';
+
   const list = document.getElementById('todayList');
   const showJamaah = hasJamaah() && events.some(e => e.jamaah !== null);
 
-  document.getElementById('todayDate').textContent =
-    DAYS[weekday] + ', ' + t.d + ' ' + MONTHS[t.m - 1] + ' ' + t.y;
-  document.getElementById('todayHijri').textContent = (entry && entry.hijri) || '';
-
   if (!events.length) {
-    list.innerHTML = '<li><div class="pname">No times for today<span>This timetable does not cover ' +
-      t.d + ' ' + MONTHS[t.m - 1] + '. Add that month in Settings → Timetable.</span></div></li>';
+    list.innerHTML = '<li><div class="pname">No times<small>This timetable does not cover ' +
+      shown.d + ' ' + MONTHS[shown.m - 1] + '. Add that month in Settings → Timetable.</small></div></li>';
   } else {
     let currentIdx = -1;
-    events.forEach((e, i) => { if (e.at <= now && !e.sun) currentIdx = i; });
-    const header = showJamaah
-      ? '<li class="hdr"><span class="picon"></span><span class="pname"></span>' +
-        '<span class="ptime">Begins</span><span class="jtime">Jamaah</span></li>'
-      : '';
-    list.innerHTML = header + events.map((e, i) => {
-      const cls = [e.sun ? 'sun' : '', e.at <= now ? 'passed' : '', i === currentIdx ? 'current' : ''].join(' ').trim();
+    if (!showTomorrow) events.forEach((e, i) => { if (e.at <= now && !e.sun) currentIdx = i; });
+    list.innerHTML = events.map((e, i) => {
+      const cls = [i % 2 ? 'alt' : '', !showTomorrow && e.at <= now ? 'passed' : '',
+                   i === currentIdx ? 'current' : ''].join(' ').trim();
       const mode = settings.sound[e.key];
       const badge = e.sun ? '' : (mode === 'azan' ? '🔊' : mode === 'beep' ? '🔔' : '🔇');
-      const jamaahCell = showJamaah
-        ? '<span class="jtime">' + (e.jamaah === null ? '—' : fmtTime(e.jamaah)) + '</span>' : '';
-      return '<li class="' + cls + '"><span class="picon">' + e.icon + '</span>' +
-        '<span class="pname">' + e.name + ' <small style="opacity:.7">' + badge + '</small>' +
-        (e.sun ? '<span>not a prayer time</span>' : '') + '</span>' +
-        '<span class="ptime">' + fmtTime(e.minutes) + '</span>' + jamaahCell + '</li>';
+      const cells = e.sun
+        ? '<span class="t wide">' + fmtTime(e.minutes) + '</span>'
+        : '<span class="t">' + fmtTime(e.minutes) + '</span>' +
+          (showJamaah
+            ? '<span class="t' + (e.jamaah === null ? ' none' : '') + '">' +
+              (e.jamaah === null ? '—' : fmtTime(e.jamaah)) + '</span>'
+            : '');
+      return '<li class="' + cls + '"><span class="pname">' + e.name + '</span>' +
+        '<span class="snd">' + badge + '</span>' + cells + '</li>';
     }).join('');
   }
 
+  const nxt = nextEvent(now);
+  document.getElementById('nextName').textContent = nxt ? nxt.name : '—';
+  document.getElementById('nextAt').textContent = nxt ? 'at ' + fmtTime(nxt.minutes) : 'no timetable data';
+  document.getElementById('countdown').textContent = nxt ? fmtDur(nxt.at - now) : '--:--:--';
+  document.getElementById('cdLabel').innerHTML = showTomorrow ? '<span class="tag">Tomorrow</span>' : '';
+
   const jummahCard = document.getElementById('jummahCard');
+  const weekday = new Date(Date.UTC(shown.y, shown.m - 1, shown.d)).getUTCDay();
   if (weekday === 5 && meta.jummah && meta.jummah.length) {
     const toMinutes = v => (+v.split(':')[0]) * 60 + (+v.split(':')[1]);
     document.getElementById('jum1').textContent = fmtTime(toMinutes(meta.jummah[0]));
@@ -589,17 +631,18 @@ function renderToday() {
   } else {
     jummahCard.style.display = 'none';
   }
+
   document.getElementById('mosqueNotes').textContent =
     (meta.notes && meta.notes.length) ? meta.notes.join(' · ') : '';
-
-  const nxt = nextEvent(now);
-  document.getElementById('nextName').textContent = nxt ? nxt.name : '—';
-  document.getElementById('nextAt').textContent = nxt ? fmtTime(nxt.minutes) : 'no timetable data';
-  document.getElementById('countdown').textContent = nxt ? fmtDur(nxt.at - now) : '--:--:--';
-  document.getElementById('cdLabel').textContent = nxt ? 'until ' + nxt.name : 'remaining';
   document.getElementById('foregroundNote').textContent = audioReady
-    ? 'The Azan plays while this app is open. Closed apps cannot play audio on a phone — use your clock alarm as a backstop.'
+    ? 'The Azan plays while this app is open. A closed app cannot play audio on a phone — keep a clock alarm as a backstop.'
     : 'Tap “Enable sound” above so the Azan can play.';
+}
+
+function renderClock() {
+  const p = zoneParts(new Date(), zoneName());
+  document.getElementById('clock').textContent =
+    pad(p.hh) + ':' + pad(p.mm) + ':' + pad(p.ss);
 }
 
 let monthCol = 'begins';
@@ -687,6 +730,7 @@ let lastDate = '', lastNextId = '', tickCount = 0;
 
 function tick() {
   const now = Date.now();
+  renderClock();
   const t = todayInZone();
   const dateKey = t.y + '-' + mmdd(t.m, t.d);
   if (dateKey !== lastDate) { lastDate = dateKey; viewMonth = null; lastNextId = ''; renderAll(); }
@@ -885,6 +929,7 @@ function wire() {
   wire();
   await loadAzanAudio();
   renderAll();
+  renderClock();
   document.getElementById('audioBanner').classList.toggle('show', !audioReady);
   setInterval(tick, 1000);
   tick();

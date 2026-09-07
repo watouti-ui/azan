@@ -7,6 +7,7 @@ month: 2026-09
 name: Shaheed Bilal Masjid
 city: Dublin 15
 tz: Europe/Dublin
+hijri_year: 1448
 jummah: 13:40, 14:40
 note: Maghrib salah 5 min after azan
 note: Isha salah 5 min after azan

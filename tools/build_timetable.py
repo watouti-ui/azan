@@ -13,6 +13,7 @@ Header lines before the rows:
     note:    free text            (optional, repeatable)
     name:    mosque name           (optional)
     city:    town or area           (optional)
+    hijri_year: 1448                (optional)
     tz:      IANA time zone       (optional, default Europe/London)
 
 Usage:
@@ -66,7 +67,7 @@ def parse_file(path: Path):
                 meta["notes"].append(value)
             elif key == "jummah":
                 meta["jummah"] = [v.strip() for v in value.split(",") if v.strip()]
-            elif key in ("month", "name", "city", "tz"):
+            elif key in ("month", "name", "city", "tz", "hijri_year"):
                 meta[key] = value
             else:
                 raise ValueError(f"{path.name}:{lineno}: unknown header {key!r}")
@@ -109,6 +110,8 @@ def main() -> None:
             meta_out["name"] = meta["name"]
         if meta.get("city"):
             meta_out["city"] = meta["city"]
+        if meta.get("hijri_year"):
+            meta_out["hijriYear"] = int(meta["hijri_year"])
         if meta.get("tz"):
             meta_out["timezone"] = meta["tz"]
         if meta.get("jummah"):

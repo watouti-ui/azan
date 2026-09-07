@@ -4,126 +4,162 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Azan</title>
-<meta name="theme-color" content="#0d1512">
+<meta name="theme-color" content="#e9e5dc">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Azan">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <style>
+/* Light, single-theme by intent: the app mirrors the mosque's own display
+   board, so it keeps that cream-and-navy identity on any device theme. */
 :root{
-  --bg:#0d1512; --panel:#131f1a; --panel-2:#182821; --line:#24382e;
-  --text:#e8f2ec; --muted:#8fa79a; --accent:#3ddc97; --accent-dim:#1f7a56;
-  --warn:#ffb020; --danger:#ff5c5c; --radius:14px;
+  --paper:#e9e5dc; --board:#f3f1ea; --row:#fbfaf6; --row-alt:#f1eee6;
+  --ink:#23263f; --ink-soft:#6d7189; --line:#d8d2c4; --line-soft:#e6e1d5;
+  --gold:#c2a05a; --gold-deep:#9d7f3f;
+  --hi:#bfe0f5; --hi-ink:#0f5f95; --accent:#0f5f95;
+  --warn-bg:#fdf0dc; --warn-line:#d8a54b; --warn-ink:#7a5310;
+  --radius:14px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{
-  background:var(--bg); color:var(--text); font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--paper); color:var(--ink);
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   overscroll-behavior-y:contain;
 }
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none}
-.wrap{max-width:560px;margin:0 auto;padding:12px 14px 96px}
-header.top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px 12px}
-.brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.2px}
-.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
-.loc{font-size:12px;color:var(--muted);text-align:right;line-height:1.3}
-.banner{border-radius:var(--radius);padding:11px 13px;font-size:13px;margin-bottom:12px;display:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding:10px 12px 92px}
+
+/* ---------- banners ---------- */
+.banner{border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:10px;display:none;line-height:1.45}
 .banner.show{display:block}
-.banner.sample{background:#3a1f10;border:1px solid #a35a17;color:#ffd8a8}
-.banner.info{background:#152a22;border:1px solid var(--accent-dim);color:#bfe8d4}
-.banner.audio{background:#10283a;border:1px solid #1d5a86;color:#bfe3ff;display:flex;gap:10px;align-items:center;justify-content:space-between}
-.banner button{background:var(--accent);color:#07120d;font-weight:700;border-radius:9px;padding:7px 12px;font-size:13px;white-space:nowrap}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}
-.next{text-align:center;padding:22px 16px 20px;background:linear-gradient(160deg,#16281f,#111c17)}
-.next .lbl{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
-.next .name{font-size:34px;font-weight:700;margin:6px 0 2px}
-.next .at{font-size:19px;color:var(--accent);font-variant-numeric:tabular-nums}
-.next .cd{margin-top:12px;font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em}
-.next .cd small{font-size:14px;color:var(--muted);font-weight:600;letter-spacing:.1em;display:block;margin-top:4px}
-.datebar{display:flex;justify-content:space-between;align-items:baseline;margin:2px 4px 10px;font-size:13px;color:var(--muted)}
-.datebar b{color:var(--text);font-size:15px}
-ul.times{list-style:none;margin:0;padding:0}
-ul.times li{display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--line)}
-ul.times li:last-child{border-bottom:0}
-ul.times li.passed{opacity:.42}
-ul.times li.current{background:rgba(61,220,151,.09);border-radius:10px;padding-left:10px;padding-right:10px}
-ul.times li.passed.current{opacity:1}
-ul.times li.current .ptime{color:var(--accent)}
-ul.times li.sun{opacity:.6}
-.pname{flex:1;font-weight:600;min-width:0}
-.pname span{display:block;font-size:11px;color:var(--muted);font-weight:500}
-.ptime{font-variant-numeric:tabular-nums;font-size:19px;font-weight:600;min-width:76px;text-align:right}
-.jtime{font-variant-numeric:tabular-nums;font-size:17px;font-weight:600;color:var(--accent);min-width:76px;text-align:right}
-ul.times li.hdr{padding:4px 4px 8px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--muted);font-weight:700}
-ul.times li.hdr .ptime,ul.times li.hdr .jtime{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.1em}
-.hijri{color:var(--accent);font-size:13px}
-.jummah{background:linear-gradient(160deg,#1a2e24,#132019);border:1px solid var(--accent-dim)}
-.jummah .k{font-weight:600}
-.seg{display:flex;gap:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:3px}
-.seg button{flex:1;padding:6px 10px;font-size:12px;border-radius:7px;color:var(--muted);font-weight:600}
-.seg button.on{background:var(--accent);color:#07120d}
-.picon{width:26px;text-align:center;font-size:15px;opacity:.85}
-nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(13,21,18,.94);backdrop-filter:blur(12px);
-  border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-nav.tabs button{flex:1;padding:12px 4px 14px;font-size:11px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:4px}
-nav.tabs button i{font-style:normal;font-size:19px;line-height:1}
-nav.tabs button.on{color:var(--accent)}
-.view{display:none}.view.on{display:block}
-h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:20px 4px 8px;font-weight:700}
-.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.banner.sample{background:#fbe3d2;border:1px solid #c9713a;color:#7c3512}
+.banner.info{background:#e4eef6;border:1px solid #a8c6dc;color:#274d6b}
+.banner.audio{background:#eef2e6;border:1px solid #b8c79a;color:#4a5730;
+  display:flex;gap:10px;align-items:center;justify-content:space-between}
+.banner.audio.show{display:flex}
+.banner button{background:var(--ink);color:#f7f5ef;font-weight:600;border-radius:8px;padding:7px 12px;font-size:13px;white-space:nowrap}
+
+/* ---------- the board ---------- */
+.board{background:var(--board);border:1px solid var(--line);border-radius:18px;overflow:hidden;
+  box-shadow:0 1px 0 #fff inset}
+.crown{position:relative;padding:12px 14px 14px;text-align:center;
+  background:linear-gradient(180deg,#efece4,#f6f4ee)}
+.crown .arch{position:absolute;left:50%;transform:translateX(-50%);top:8px;width:calc(100% - 22px);
+  height:calc(100% - 16px);pointer-events:none;opacity:.5}
+.crownrow{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.dstack{font-size:12px;line-height:1.15;color:var(--ink-soft);min-width:62px;font-weight:600}
+.dstack b{display:block;font-size:26px;line-height:1.05;color:var(--ink);font-weight:700;margin:1px 0}
+.dstack.right{text-align:right}
+.mark{width:52px;flex:0 0 52px;margin-top:2px}
+.mark svg{display:block;width:100%;height:auto}
+.clock{position:relative;margin-top:8px;font-size:clamp(38px,12vw,54px);font-weight:800;letter-spacing:.01em;
+  font-variant-numeric:tabular-nums;color:var(--gold);
+  text-shadow:0 1px 0 #fff, 0 0 1px var(--gold-deep)}
+
+.thead{display:flex;align-items:center;gap:8px;padding:10px 16px 8px;border-bottom:1px solid var(--line);
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);font-weight:700}
+.thead .c1{flex:1}
+.thead .c2,.thead .c3{width:84px;text-align:center}
+
+ul.times{list-style:none;margin:0;padding:8px 10px}
+ul.times li{display:flex;align-items:center;gap:8px;padding:12px 6px;border-radius:11px;background:var(--row);
+  margin-bottom:6px;border:1px solid var(--line-soft)}
+ul.times li:last-child{margin-bottom:0}
+ul.times li.alt{background:var(--row-alt)}
+ul.times li.passed{opacity:.55}
+ul.times li.current{background:var(--hi);border-color:#8fc6e6;opacity:1}
+ul.times li.current .pname,ul.times li.current .t{color:var(--hi-ink)}
+.pname{flex:1;font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:15px;min-width:0}
+.pname small{display:block;text-transform:none;letter-spacing:0;font-size:11px;color:var(--ink-soft);font-weight:500}
+.t{width:84px;text-align:center;font-variant-numeric:tabular-nums;font-size:21px;font-weight:600}
+.t.wide{width:168px}
+.t.none{color:var(--ink-soft);font-size:16px}
+.snd{font-size:12px;opacity:.5;width:16px;text-align:center}
+
+.upnext{display:flex;align-items:baseline;justify-content:center;gap:12px;padding:12px 16px;
+  border-top:1px solid var(--line);background:#f6f4ee}
+.upnext .n{font-size:17px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.upnext .cd{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
+.upnext .at{font-size:12px;color:var(--ink-soft)}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 16px;
+  background:#eceadf;border-top:1px solid var(--line);font-size:12px;color:var(--ink-soft)}
+.foot b{color:var(--ink);font-weight:700}
+.tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--hi-ink);
+  background:var(--hi);border-radius:999px;padding:3px 9px}
+
+/* ---------- cards, settings ---------- */
+.card{background:var(--board);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-top:12px}
+.jummah{background:#eef5fa;border-color:#b9d5e8}
+h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:18px 4px 7px;font-weight:700}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--line-soft)}
 .row:last-child{border-bottom:0}
 .row .k{font-size:15px}
-.row .k small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.35}
+.row .k small{display:block;color:var(--ink-soft);font-size:12px;margin-top:2px;line-height:1.35}
+.row .v{font-variant-numeric:tabular-nums;font-size:17px;font-weight:600}
 select,input[type=text],input[type=number],textarea{
-  background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0}
+  background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 10px;min-width:0}
 select{min-width:104px}
 input[type=number]{width:76px;text-align:center}
 textarea{width:100%;min-height:150px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
-.btn{background:var(--accent);color:#07120d;font-weight:700;border-radius:11px;padding:11px 15px;font-size:14px}
-.btn.sec{background:var(--panel-2);color:var(--text);border:1px solid var(--line)}
-.btn.warn{background:#3a1516;color:#ffb4b4;border:1px solid #6d2222}
+.btn{background:var(--ink);color:#f7f5ef;font-weight:600;border-radius:10px;padding:11px 15px;font-size:14px}
+.btn.sec{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn.warn{background:#fbe3e3;color:#8a2020;border:1px solid #d8a3a3}
 .btn.block{display:block;width:100%;margin-top:10px}
 .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .sw{position:relative;width:50px;height:29px;flex:0 0 auto}
 .sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0}
-.sw span{position:absolute;inset:0;background:var(--panel-2);border:1px solid var(--line);border-radius:999px;transition:.15s}
-.sw span:after{content:"";position:absolute;width:21px;height:21px;border-radius:50%;background:#7d9a8c;top:3px;left:3px;transition:.15s}
-.sw input:checked + span{background:var(--accent-dim);border-color:var(--accent)}
-.sw input:checked + span:after{background:var(--accent);transform:translateX(21px)}
+.sw span{position:absolute;inset:0;background:#e3ded1;border:1px solid var(--line);border-radius:999px;transition:.15s}
+.sw span:after{content:"";position:absolute;width:21px;height:21px;border-radius:50%;background:#fff;top:3px;left:3px;
+  transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.sw input:checked + span{background:var(--accent);border-color:var(--accent)}
+.sw input:checked + span:after{transform:translateX(21px)}
+.seg{display:flex;gap:4px;background:#e6e2d6;border:1px solid var(--line);border-radius:10px;padding:3px;margin-bottom:10px}
+.seg button{flex:1;padding:6px 10px;font-size:12px;border-radius:7px;color:var(--ink-soft);font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase}
+.seg button.on{background:var(--ink);color:#f7f5ef}
+
 table.month{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
-table.month th{text-align:right;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 4px;border-bottom:1px solid var(--line);font-weight:700}
+table.month th{text-align:right;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);
+  padding:6px 4px;border-bottom:1px solid var(--line);font-weight:700}
 table.month th:first-child{text-align:left}
-table.month td{padding:8px 4px;text-align:right;border-bottom:1px solid rgba(36,56,46,.5)}
-table.month td:first-child{text-align:left;color:var(--muted)}
-table.month tr.today{background:rgba(61,220,151,.1)}
-table.month tr.today td{color:var(--text);font-weight:700}
-table.month tr.fri td:first-child{color:var(--accent)}
-.mnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.mnav button{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:7px 13px;font-size:16px}
+table.month td{padding:8px 4px;text-align:right;border-bottom:1px solid var(--line-soft)}
+table.month td:first-child{text-align:left;color:var(--ink-soft)}
+table.month tr.today{background:var(--hi)}
+table.month tr.today td{color:var(--hi-ink);font-weight:700}
+table.month tr.fri td:first-child{color:var(--accent);font-weight:700}
+.mnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.mnav button{background:#fff;border:1px solid var(--line);border-radius:9px;padding:6px 13px;font-size:16px}
 .mnav b{font-size:15px}
 .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.note{font-size:12px;color:var(--muted);line-height:1.5;margin:8px 2px 0}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;background:#1d3b2d;border:1px solid var(--accent-dim);
-  color:var(--text);padding:10px 16px;border-radius:11px;font-size:13px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88vw;text-align:center}
+.note{font-size:12px;color:var(--ink-soft);line-height:1.5;margin:8px 4px 0}
+.pill{font-size:11px;padding:3px 8px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--ink-soft)}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(240,237,229,.96);
+  backdrop-filter:blur(12px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;padding:11px 4px 13px;font-size:11px;color:var(--ink-soft);display:flex;flex-direction:column;
+  align-items:center;gap:4px;font-weight:600}
+nav.tabs button svg{width:21px;height:21px;display:block}
+nav.tabs button.on{color:var(--accent)}
+.view{display:none}.view.on{display:block}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;background:var(--ink);color:#f7f5ef;
+  padding:10px 16px;border-radius:10px;font-size:13px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s;
+  max-width:88vw;text-align:center}
 .toast.show{opacity:1}
-.pill{font-size:11px;padding:3px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header class="top">
-    <div class="brand"><span class="dot"></span> Azan</div>
-    <div class="loc" id="locBox">—</div>
-  </header>
 
   <div class="banner sample" id="sampleBanner">
     <b>Sample timetable — do not pray by these times.</b><br>
-    Import your own timetable in Settings → Timetable.
+    Import the mosque's timetable in Settings → Timetable.
   </div>
   <div class="banner info" id="coverBanner"></div>
   <div class="banner audio" id="audioBanner">
@@ -133,18 +169,54 @@ table.month tr.fri td:first-child{color:var(--accent)}
 
   <!-- TODAY -->
   <section class="view on" id="v-today">
-    <div class="card next">
-      <div class="lbl">Next</div>
-      <div class="name" id="nextName">—</div>
-      <div class="at" id="nextAt">—</div>
-      <div class="cd" id="countdown">--:--:--</div>
-      <small id="cdLabel">remaining</small>
+    <div class="board">
+      <div class="crown">
+        <svg class="arch" viewBox="0 0 400 110" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M4 110 L4 44 Q4 20 52 16 Q140 11 191 2 L200 0 L209 2 Q260 11 348 16 Q396 20 396 44 L396 110"
+                fill="none" stroke="#c9c2b0" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+        </svg>
+        <div class="crownrow">
+          <div class="dstack" id="todayDate">—</div>
+          <div class="mark">
+            <svg viewBox="0 0 100 116" aria-label="Masjid">
+              <path d="M6 44 L50 6 L94 44" fill="none" stroke="#23263f" stroke-width="3" stroke-linecap="round"/>
+              <g fill="#23263f">
+                <rect x="24" y="33" width="4" height="7"></rect><rect x="32" y="33" width="4" height="7"></rect>
+                <rect x="40" y="33" width="4" height="7"></rect><rect x="48" y="33" width="4" height="7"></rect>
+                <rect x="56" y="33" width="4" height="7"></rect><rect x="64" y="33" width="4" height="7"></rect>
+                <rect x="72" y="33" width="4" height="7"></rect>
+                <rect x="24" y="100" width="4" height="7"></rect><rect x="32" y="100" width="4" height="7"></rect>
+                <rect x="40" y="100" width="4" height="7"></rect><rect x="48" y="100" width="4" height="7"></rect>
+                <rect x="56" y="100" width="4" height="7"></rect><rect x="64" y="100" width="4" height="7"></rect>
+                <rect x="72" y="100" width="4" height="7"></rect>
+              </g>
+              <rect x="22" y="40" width="56" height="60" fill="none" stroke="#23263f" stroke-width="5"></rect>
+              <rect x="31" y="49" width="38" height="42" fill="none" stroke="#23263f" stroke-width="2"></rect>
+              <path d="M40 91 L40 66 A10 10 0 0 1 60 66 L60 91 Z" fill="#23263f"></path>
+            </svg>
+          </div>
+          <div class="dstack right" id="todayHijri">—</div>
+        </div>
+        <div class="clock" id="clock">--:--:--</div>
+      </div>
+
+      <div class="thead"><span class="c1">Prayer</span><span class="c2">Adhan</span><span class="c3">Iqamah</span></div>
+      <ul class="times" id="todayList"></ul>
+
+      <div class="upnext">
+        <span class="n" id="nextName">—</span>
+        <span class="cd" id="countdown">--:--:--</span>
+        <span class="at" id="nextAt">—</span>
+      </div>
+      <div class="foot">
+        <span id="cdLabel"></span>
+        <span id="locBox">—</span>
+      </div>
     </div>
-    <div class="datebar"><b id="todayDate">—</b><span class="hijri" id="todayHijri"></span></div>
-    <div class="card"><ul class="times" id="todayList"></ul></div>
+
     <div class="card jummah" id="jummahCard" style="display:none">
-      <div class="row" style="border:0;padding:0 0 8px"><div class="k">Jummah — first khutba</div><span class="ptime" id="jum1">—</span></div>
-      <div class="row" style="border:0;padding:0"><div class="k">Jummah — second khutba</div><span class="ptime" id="jum2">—</span></div>
+      <div class="row" style="border:0;padding:0 0 8px"><div class="k">Jummah — first khutba</div><span class="v" id="jum1">—</span></div>
+      <div class="row" style="border:0;padding:0"><div class="k">Jummah — second khutba</div><span class="v" id="jum2">—</span></div>
     </div>
     <p class="note" id="mosqueNotes"></p>
     <p class="note" id="foregroundNote"></p>
@@ -153,15 +225,13 @@ table.month tr.fri td:first-child{color:var(--accent)}
   <!-- MONTH -->
   <section class="view" id="v-month">
     <div class="card">
-      <div class="mnav">
-        <button id="prevM">‹</button><b id="mLabel">—</b><button id="nextM">›</button>
-      </div>
-      <div class="seg" id="monthSeg" style="margin-bottom:10px">
-        <button data-col="begins" class="on">Begins</button>
-        <button data-col="jamaah">Jamaah</button>
+      <div class="mnav"><button id="prevM">‹</button><b id="mLabel">—</b><button id="nextM">›</button></div>
+      <div class="seg" id="monthSeg">
+        <button data-col="begins" class="on">Adhan</button>
+        <button data-col="jamaah">Iqamah</button>
       </div>
       <div class="scroll"><table class="month" id="monthTable"></table></div>
-      <p class="note">Begins times include your per-prayer adjustments from Settings. Jamaah times are shown exactly as the mosque publishes them.</p>
+      <p class="note">Adhan times include your per-prayer adjustments from Settings. Iqamah times are shown exactly as the mosque publishes them.</p>
     </div>
   </section>
 
@@ -176,17 +246,15 @@ table.month tr.fri td:first-child{color:var(--accent)}
     <h2>Alerts</h2>
     <div class="card">
       <div class="row">
-        <div class="k">Notifications
-          <small id="notifState">Shows a banner at prayer time while the app is running.</small>
-        </div>
+        <div class="k">Notifications<small id="notifState">Shows a banner at prayer time while the app is running.</small></div>
         <button class="btn sec" id="notifBtn">Enable</button>
       </div>
       <div class="row">
-        <div class="k">Pre-prayer reminder<small>Minutes before. 0 = off.</small></div>
+        <div class="k">Pre-prayer reminder<small>Minutes before the adhan. 0 = off.</small></div>
         <input type="number" id="preMins" min="0" max="60" step="1">
       </div>
       <div class="row">
-        <div class="k">Jamaah reminder<small>Minutes before the jamaah time. 0 = off.</small></div>
+        <div class="k">Iqamah reminder<small>Minutes before the congregation. 0 = off.</small></div>
         <input type="number" id="jamMins" min="0" max="60" step="1">
       </div>
       <div class="row">
@@ -220,18 +288,18 @@ table.month tr.fri td:first-child{color:var(--accent)}
         <div class="k">Loaded<small id="ttState">—</small></div>
         <span class="pill" id="ttDays">0 days</span>
       </div>
-      <p class="note">Paste your timetable below (CSV, TSV, or copied from a PDF/webpage). One row per day: a date, then Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha. A header row is used if present.</p>
-      <textarea id="importText" placeholder="Date,Fajr,Sunrise,Dhuhr,Asr,Maghrib,Isha&#10;1 Jan,06:29,08:06,12:06,14:00,16:02,17:32&#10;2 Jan,06:29,08:06,12:07,14:01,16:03,17:33"></textarea>
+      <p class="note">Paste the timetable below (CSV, TSV, or copied from a PDF or webpage). One row per day: a date, then the times. Two times per prayer are read as adhan + iqamah. Imports merge, so months can be added one at a time.</p>
+      <textarea id="importText" placeholder="Date,Fajr,,Sunrise,Dhuhr,,Asr,,Maghrib,,Isha,&#10;Tue 1,4:49,5:30,6:30,1:28,1:50,5:12,5:30,8:21,8:26,21:55,10:00"></textarea>
       <div class="row" style="border:0;padding-top:10px">
         <div class="k">If rows show a day number only</div>
         <select id="defMonth"></select>
       </div>
       <div class="row" style="border:0;padding-top:0">
-        <div class="k">Columns<small>Two times per prayer = begins + jamaah.</small></div>
+        <div class="k">Columns<small>Two times per prayer = adhan + iqamah.</small></div>
         <select id="colMode">
           <option value="auto">Auto-detect</option>
-          <option value="begins">Begins only</option>
-          <option value="pairs">Begins + jamaah</option>
+          <option value="begins">Adhan only</option>
+          <option value="pairs">Adhan + iqamah</option>
         </select>
       </div>
       <div class="row" style="border:0;padding-top:0">
@@ -248,10 +316,10 @@ table.month tr.fri td:first-child{color:var(--accent)}
       <p class="note" id="importLog"></p>
     </div>
 
-    <h2>Location label</h2>
+    <h2>Mosque</h2>
     <div class="card">
-      <div class="row"><div class="k">Mosque</div><input type="text" id="metaName" placeholder="e.g. Shaheed Bilal Masjid"></div>
-      <div class="row"><div class="k">Area</div><input type="text" id="metaCity" placeholder="e.g. Dublin 15"></div>
+      <div class="row"><div class="k">Name</div><input type="text" id="metaName" placeholder="Shaheed Bilal Masjid"></div>
+      <div class="row"><div class="k">Area</div><input type="text" id="metaCity" placeholder="Dublin 15"></div>
       <div class="row"><div class="k">Time zone<small>IANA name. Blank = device time zone.</small></div><input type="text" id="metaTz" placeholder="Europe/Dublin"></div>
       <button class="btn sec block" id="saveMeta">Save</button>
     </div>
@@ -259,8 +327,8 @@ table.month tr.fri td:first-child{color:var(--accent)}
     <h2>About</h2>
     <div class="card">
       <p class="note" style="margin-top:0">
-        Times come from the timetable you import — nothing is calculated or fetched. Accuracy is the accuracy of your table.<br><br>
-        <b>Background limits:</b> a web app cannot schedule alarms while it is closed. The Azan plays and notifications fire only while this app is open (foreground, or a recent background tab on Android). For a guaranteed alarm with the screen off, use your phone's clock/alarm app alongside this one.
+        Times come from the timetable published by the mosque — nothing is calculated or fetched. Accuracy is the accuracy of that table.<br><br>
+        <b>Background limits:</b> a web app cannot schedule alarms while it is closed. The Azan plays and notifications fire only while this app is open. For a guaranteed alarm with the screen off, use your phone's clock app alongside this one.
       </p>
       <div class="row"><div class="k">Version</div><span class="pill" id="verPill">—</span></div>
     </div>
@@ -268,9 +336,15 @@ table.month tr.fri td:first-child{color:var(--accent)}
 </div>
 
 <nav class="tabs">
-  <button data-v="today" class="on"><i>🕌</i>Today</button>
-  <button data-v="month"><i>📅</i>Month</button>
-  <button data-v="settings"><i>⚙️</i>Settings</button>
+  <button data-v="today" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V11l8-6 8 6v9"/><path d="M10 20v-5h4v5"/></svg>
+    Today</button>
+  <button data-v="month">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    Month</button>
+  <button data-v="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.2M12 18.8V21M4.2 7.6l1.9 1.1M17.9 15.3l1.9 1.1M4.2 16.4l1.9-1.1M17.9 8.7l1.9-1.1"/></svg>
+    Settings</button>
 </nav>
 <div class="toast" id="toast"></div>
 
