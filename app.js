@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -22,8 +22,8 @@ const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 // the timetable uses.
 const HIJRI_SHORT = [
   [/muharram/i, 'Muh'], [/safar/i, 'Saf'],
-  [/rabi.*(awwal|i\b|1)/i, 'Rab I'], [/rabi.*(akhir|thani|ii\b|2)/i, 'Rab II'],
-  [/jumada.*(ula|awwal|i\b|1)/i, 'Jum I'], [/jumada.*(akhir|thani|ii\b|2)/i, 'Jum II'],
+  [/rabi.*(akhir|thani|ii\b|2)/i, 'Rab2'], [/rabi/i, 'Rab1'],
+  [/jumada.*(akhir|thani|ii\b|2)/i, 'Jum2'], [/jumada/i, 'Jum1'],
   [/rajab/i, 'Raj'], [/sha.?ban/i, 'Sha'], [/ramad/i, 'Ram'], [/shaww/i, 'Shw'],
   [/qa.?d/i, 'Qad'], [/hijj/i, 'Hij']
 ];
@@ -34,6 +34,19 @@ function hijriParts(text) {
   let month = String(text).replace(/\d+/g, '').trim();
   for (const [re, short] of HIJRI_SHORT) if (re.test(month)) { month = short; break; }
   return { day: day, month: month };
+}
+
+// The board's Hijri date runs one day ahead of the Hijri column on the printed
+// sheet: on 7 Sep (sheet: 24) it read 25, and on 8 Sep (sheet: 25) it read 26.
+// So take the next day's entry, falling back to bumping today's day number
+// when the timetable stops at a month end.
+function boardHijri(t) {
+  const next = addDays(t, 1);
+  const ahead = dayEntry(next.m, next.d);
+  if (ahead && ahead.hijri) return ahead.hijri;
+  const here = dayEntry(t.m, t.d);
+  if (!here || !here.hijri) return null;
+  return String(here.hijri).replace(/^(\s*)(\d{1,2})/, (m, sp, d) => sp + (+d + 1));
 }
 
 function addDays(t, n) {
@@ -118,19 +131,21 @@ function todayInZone() { return zoneParts(new Date(), zoneName()); }
 const pad = n => String(n).padStart(2, '0');
 const mmdd = (m, d) => pad(m) + '-' + pad(d);
 
-function fmtTime(minutes) {
+// The board prints 24-hour times with no leading zero on the hour: 5:03, 13:25.
+// `padHour` is for the month grid, where the columns should line up.
+function fmtTime(minutes, padHour) {
   const t = ((Math.round(minutes) % 1440) + 1440) % 1440;
   const h = Math.floor(t / 60), m = t % 60;
-  if (settings.use24) return pad(h) + ':' + pad(m);
+  if (settings.use24) return (padHour ? pad(h) : h) + ':' + pad(m);
   const ap = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return h12 + ':' + pad(m) + ' ' + ap;
 }
 
+// Always hh:mm:ss, as on the board (00:15:40).
 function fmtDur(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), s = total % 60;
-  return (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(s);
+  return pad(Math.floor(total / 3600)) + ':' + pad(Math.floor(total % 3600 / 60)) + ':' + pad(total % 60);
 }
 
 /* ------------------------------------------------------------- timetable  */
@@ -549,8 +564,7 @@ function coveredMonths() {
 
 function renderHeader() {
   const meta = (timetable && timetable.meta) || {};
-  document.getElementById('locBox').innerHTML =
-    '<b>' + (meta.name || 'No mosque set') + '</b>' + (meta.city ? ' · ' + meta.city : '');
+  document.getElementById('locBox').textContent = meta.name || 'No mosque set';
   document.getElementById('sampleBanner').classList.toggle('show', !!meta.placeholder);
   document.getElementById('verPill').textContent = APP_VERSION;
 
@@ -571,11 +585,8 @@ function renderToday() {
   const meta = (timetable && timetable.meta) || {};
   const todayEvents = eventsFor(t.y, t.m, t.d);
   const isha = todayEvents.find(e => e.key === 'isha');
-  const maghrib = todayEvents.find(e => e.key === 'maghrib');
 
-  // The mosque's own board rolls the Hijri date at Maghrib and switches the
-  // table to tomorrow after Isha. Match both.
-  const rolledHijri = maghrib && now >= maghrib.at ? addDays(t, 1) : t;
+  // After Isha the board switches the table to tomorrow, as "Tomorrow @ ...".
   const showTomorrow = !!(isha && now >= isha.at);
   const shown = showTomorrow ? addDays(t, 1) : t;
   const events = showTomorrow ? eventsFor(shown.y, shown.m, shown.d) : todayEvents;
@@ -583,7 +594,7 @@ function renderToday() {
   document.getElementById('todayDate').innerHTML =
     MONTHS_SHORT[t.m - 1] + '<b>' + t.d + '</b>' + t.y;
 
-  const hijri = hijriParts((dayEntry(rolledHijri.m, rolledHijri.d) || {}).hijri);
+  const hijri = hijriParts(boardHijri(t));
   document.getElementById('todayHijri').innerHTML = hijri
     ? hijri.month + '<b>' + hijri.day + '</b>' + (meta.hijriYear || '')
     : '';
@@ -614,11 +625,7 @@ function renderToday() {
     }).join('');
   }
 
-  const nxt = nextEvent(now);
-  document.getElementById('nextName').textContent = nxt ? nxt.name : '—';
-  document.getElementById('nextAt').textContent = nxt ? 'at ' + fmtTime(nxt.minutes) : 'no timetable data';
-  document.getElementById('countdown').textContent = nxt ? fmtDur(nxt.at - now) : '--:--:--';
-  document.getElementById('cdLabel').innerHTML = showTomorrow ? '<span class="tag">Tomorrow</span>' : '';
+  renderCountdown(now);
 
   const jummahCard = document.getElementById('jummahCard');
   const weekday = new Date(Date.UTC(shown.y, shown.m - 1, shown.d)).getUTCDay();
@@ -639,10 +646,41 @@ function renderToday() {
     : 'Tap “Enable sound” above so the Azan can play.';
 }
 
+// The board counts down to the adhan, then - once the adhan has passed and
+// the congregation has not - to "<PRAYER> IQAMAH". The bar underneath fills
+// across whichever interval is running.
+function countdownTarget(now) {
+  const t = todayInZone();
+  const today = eventsFor(t.y, t.m, t.d);
+  for (const e of today) {
+    if (!e.sun && e.jamaahAt !== null && e.at <= now && now < e.jamaahAt) {
+      return { label: e.name + ' Iqamah', at: e.jamaahAt };
+    }
+  }
+  const nxt = nextEvent(now);
+  return nxt ? { label: nxt.name, at: nxt.at } : null;
+}
+
+function afterIsha(now) {
+  const t = todayInZone();
+  const isha = eventsFor(t.y, t.m, t.d).find(e => e.key === 'isha');
+  return !!(isha && now >= isha.at);
+}
+
+function renderCountdown(now) {
+  const meta = (timetable && timetable.meta) || {};
+  const target = countdownTarget(now);
+  document.getElementById('nextName').textContent = target ? target.label.toUpperCase() : '—';
+  document.getElementById('countdown').textContent = target ? fmtDur(target.at - now) : '--:--:--';
+
+  document.getElementById('cdLabel').textContent =
+    (afterIsha(now) ? 'Tomorrow' : 'Today') + ' @ ' + (meta.city || zoneName().split('/').pop()).replace(/\s+\d+$/, '') + ' ·';
+}
+
 function renderClock() {
   const p = zoneParts(new Date(), zoneName());
   document.getElementById('clock').textContent =
-    pad(p.hh) + ':' + pad(p.mm) + ':' + pad(p.ss);
+    p.hh + ':' + pad(p.mm) + ':' + pad(p.ss);
 }
 
 let monthCol = 'begins';
@@ -665,7 +703,7 @@ function renderMonth() {
     html += '<tr class="' + cls + '"><td>' + pad(d) + ' ' + DAYS[wd].slice(0, 3) + '</td>' +
       PRAYERS.map(p => {
         const mins = minutesFor(entry, p.k, monthCol);
-        return '<td>' + (mins === null ? '—' : fmtTime(mins)) + '</td>';
+        return '<td>' + (mins === null ? '—' : fmtTime(mins, true)) + '</td>';
       }).join('') + '</tr>';
   }
   document.getElementById('monthTable').innerHTML = html;
@@ -735,8 +773,8 @@ function tick() {
   const dateKey = t.y + '-' + mmdd(t.m, t.d);
   if (dateKey !== lastDate) { lastDate = dateKey; viewMonth = null; lastNextId = ''; renderAll(); }
 
+  renderCountdown(now);
   const nxt = nextEvent(now);
-  document.getElementById('countdown').textContent = nxt ? fmtDur(nxt.at - now) : '--:--:--';
 
   // Redraw when the next prayer changes, and once every 30s regardless.
   const nextId = nxt ? nxt.date + ':' + nxt.key : 'none';
@@ -802,15 +840,25 @@ function applyImport(result, sourceLabel) {
 }
 
 function wire() {
-  document.querySelectorAll('nav.tabs button').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b === btn));
-      document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + btn.dataset.v));
-      if (btn.dataset.v === 'month') renderMonth();
-      if (btn.dataset.v === 'settings') renderSettings();
-      window.scrollTo(0, 0);
-    };
-  });
+  function closeMenu() {
+    document.getElementById('menu').hidden = true;
+    document.getElementById('scrim').hidden = true;
+  }
+  function showView(name) {
+    closeMenu();
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + name));
+    if (name === 'month') renderMonth();
+    if (name === 'settings') renderSettings();
+    window.scrollTo(0, 0);
+  }
+  document.getElementById('menuBtn').onclick = () => {
+    const open = document.getElementById('menu').hidden;
+    document.getElementById('menu').hidden = !open;
+    document.getElementById('scrim').hidden = !open;
+  };
+  document.getElementById('scrim').onclick = closeMenu;
+  document.querySelectorAll('#menu button').forEach(b => { b.onclick = () => showView(b.dataset.v); });
+  document.querySelectorAll('.topbar button.back').forEach(b => { b.onclick = () => showView('today'); });
 
   document.getElementById('unlockBtn').onclick = () => { unlockAudio(); chime(1); renderToday(); };
   document.getElementById('testBtn').onclick = () => { unlockAudio(); setTimeout(playAzan, 120); };

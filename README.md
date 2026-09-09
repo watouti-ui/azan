@@ -1,8 +1,8 @@
 # Azan — prayer times from your own timetable
 
-A self-contained web app (PWA) laid out like the mosque's own display board:
-adhan and iqamah columns, live clock, Hijri date, and the Azan played when the
-time arrives. Installs to an iPhone
+A self-contained web app (PWA) built as a replica of the mosque's own display
+board — same arch, clock, adhan and iqamah columns, countdown and footer — with
+the Azan played when the time arrives. Installs to an iPhone
 or Android home screen and works offline. No account, no server, no tracking.
 
 **Times are never calculated or fetched.** The app shows exactly what is in the
@@ -168,8 +168,11 @@ Works:
 - Today's six times in **begins** and **jamaah** columns, next-prayer countdown,
   current prayer highlighted, Hijri date from the timetable
 - Jummah khutba times shown on Fridays; mosque notes shown under the list
-- Follows the board's conventions: the Hijri date rolls at Maghrib, and after
-  Isha the table switches to tomorrow, tagged as such
+- Follows the board's conventions: 24-hour times with no leading zero, the
+  countdown switching to "<PRAYER> IQAMAH" once the adhan has passed, the table
+  switching to tomorrow after Isha, and the "Today @ ..." footer
+- The board's Hijri date runs one day ahead of the Hijri column on the printed
+  sheet, so the app shows the next day's entry to match it
 - Full month table, any month, switchable between begins and jamaah
 - Azan or chime per prayer, individually settable
 - Per-prayer adjustment of −60 to +60 minutes (begins times only — jamaah times
