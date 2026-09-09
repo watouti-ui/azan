@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -584,10 +584,9 @@ function renderToday() {
   const t = todayInZone();
   const meta = (timetable && timetable.meta) || {};
   const todayEvents = eventsFor(t.y, t.m, t.d);
-  const isha = todayEvents.find(e => e.key === 'isha');
 
-  // After Isha the board switches the table to tomorrow, as "Tomorrow @ ...".
-  const showTomorrow = !!(isha && now >= isha.at);
+  // Once Isha has been prayed the board switches the table to tomorrow.
+  const showTomorrow = ishaDone(now);
   const shown = showTomorrow ? addDays(t, 1) : t;
   const events = showTomorrow ? eventsFor(shown.y, shown.m, shown.d) : todayEvents;
 
@@ -606,11 +605,14 @@ function renderToday() {
     list.innerHTML = '<li><div class="pname">No times<small>This timetable does not cover ' +
       shown.d + ' ' + MONTHS[shown.m - 1] + '. Add that month in Settings → Timetable.</small></div></li>';
   } else {
-    let currentIdx = -1;
-    if (!showTomorrow) events.forEach((e, i) => { if (e.at <= now && !e.sun) currentIdx = i; });
+    // The highlighted row is whatever the countdown is running towards, so it
+    // moves down the table through the day. Once the table has flipped to
+    // tomorrow, nothing is highlighted — as on the board.
+    const target = countdownTarget(now);
+    const currentKey = showTomorrow || !target ? null : target.key;
     list.innerHTML = events.map((e, i) => {
-      const cls = [i % 2 ? 'alt' : '', !showTomorrow && e.at <= now ? 'passed' : '',
-                   i === currentIdx ? 'current' : ''].join(' ').trim();
+      const cls = [!showTomorrow && e.at <= now ? 'passed' : '',
+                   e.key === currentKey ? 'current' : ''].join(' ').trim();
       const mode = settings.sound[e.key];
       const badge = e.sun ? '' : (mode === 'azan' ? '🔊' : mode === 'beep' ? '🔔' : '🔇');
       const cells = e.sun
@@ -652,19 +654,34 @@ function renderToday() {
 function countdownTarget(now) {
   const t = todayInZone();
   const today = eventsFor(t.y, t.m, t.d);
+
+  // While a prayer's adhan has gone but the congregation has not, the board
+  // counts down to that prayer's iqamah and keeps it highlighted.
   for (const e of today) {
     if (!e.sun && e.jamaahAt !== null && e.at <= now && now < e.jamaahAt) {
-      return { label: e.name + ' Iqamah', at: e.jamaahAt };
+      return { label: e.name + ' Iqamah', at: e.jamaahAt, key: e.key };
     }
   }
-  const nxt = nextEvent(now);
-  return nxt ? { label: nxt.name, at: nxt.at } : null;
+
+  // Otherwise it is the next prayer still to come. Sunrise is in the table but
+  // is not a prayer, so it is never the target.
+  let upcoming = today.filter(e => !e.sun && e.at > now);
+  if (!upcoming.length) {
+    const nx = addDays(t, 1);
+    upcoming = eventsFor(nx.y, nx.m, nx.d).filter(e => !e.sun && e.at > now);
+  }
+  if (!upcoming.length) return null;
+  const nxt = upcoming[0];
+  return { label: nxt.name, at: nxt.at, key: nxt.key };
 }
 
-function afterIsha(now) {
+// The board's day ends when the Isha congregation has been held, not when its
+// adhan sounded - Isha keeps its row through the iqamah window like the rest.
+function ishaDone(now) {
   const t = todayInZone();
   const isha = eventsFor(t.y, t.m, t.d).find(e => e.key === 'isha');
-  return !!(isha && now >= isha.at);
+  if (!isha) return false;
+  return now >= (isha.jamaahAt === null ? isha.at : isha.jamaahAt);
 }
 
 function renderCountdown(now) {
@@ -674,7 +691,7 @@ function renderCountdown(now) {
   document.getElementById('countdown').textContent = target ? fmtDur(target.at - now) : '--:--:--';
 
   document.getElementById('cdLabel').textContent =
-    (afterIsha(now) ? 'Tomorrow' : 'Today') + ' @ ' + (meta.city || zoneName().split('/').pop()).replace(/\s+\d+$/, '') + ' ·';
+    (ishaDone(now) ? 'Tomorrow' : 'Today') + ' @ ' + (meta.city || zoneName().split('/').pop()).replace(/\s+\d+$/, '') + ' ·';
 }
 
 function renderClock() {
@@ -774,10 +791,11 @@ function tick() {
   if (dateKey !== lastDate) { lastDate = dateKey; viewMonth = null; lastNextId = ''; renderAll(); }
 
   renderCountdown(now);
-  const nxt = nextEvent(now);
 
-  // Redraw when the next prayer changes, and once every 30s regardless.
-  const nextId = nxt ? nxt.date + ':' + nxt.key : 'none';
+  // Redraw when the countdown moves to another prayer - that is also when the
+  // highlight has to move - and once every 30s regardless.
+  const target = countdownTarget(now);
+  const nextId = target ? target.key + '@' + target.at : 'none';
   if (nextId !== lastNextId) { lastNextId = nextId; renderToday(); }
   else if (++tickCount % 30 === 0) renderToday();
 
