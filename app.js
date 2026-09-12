@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -446,6 +446,45 @@ async function loadAzanAudio() {
     : 'Built-in chime (no audio file added)';
 }
 
+function alertsArmed() {
+  const notif = ('Notification' in window) ? Notification.permission : 'unsupported';
+  return audioReady && (notif === 'granted' || notif === 'unsupported' || notif === 'denied');
+}
+
+function updateAlertBar() {
+  const bar = document.getElementById('audioBanner');
+  const chip = document.getElementById('soundChip');
+  if (!bar) return;
+  const notif = ('Notification' in window) ? Notification.permission : 'unsupported';
+  const needAudio = !audioReady;
+  const needNotif = notif === 'default';
+  bar.hidden = !(needAudio || needNotif);
+  document.getElementById('alertText').textContent =
+    needAudio && needNotif ? 'Sound and alerts are off'
+    : needAudio ? 'Sound is off — the Azan will not play'
+    : 'Notifications are off';
+  if (chip) {
+    chip.textContent = audioReady ? (notif === 'granted' ? '🔔' : '🔊') : '🔇';
+    chip.title = audioReady
+      ? (notif === 'granted' ? 'Sound and notifications on' : 'Sound on, notifications off')
+      : 'Tap to turn sound on';
+  }
+}
+
+// One tap arms everything: the browser needs a gesture before it will play
+// audio, and notification permission has to be asked for from one too.
+async function armAlerts() {
+  unlockAudio();
+  if ('Notification' in window && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch (e) {}
+  }
+  chime(1);
+  updateAlertBar();
+  renderToday();
+  renderSettings();
+  toast(alertsArmed() ? 'Alerts on' : 'Sound on');
+}
+
 function unlockAudio() {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -460,7 +499,6 @@ function unlockAudio() {
   if (p && p.catch) p.catch(() => {});
   setTimeout(() => { try { azanEl.pause(); azanEl.currentTime = 0; azanEl.muted = false; } catch (e) {} }, 60);
   audioReady = true;
-  document.getElementById('audioBanner').classList.remove('show');
 }
 
 function chime(times) {
@@ -535,9 +573,9 @@ function fire(event, kind) {
   }
   if (kind === 'jam') {
     const mins = settings.jam;
-    notify(event.name + ' jamaah in ' + mins + ' min', 'Jamaah at ' + fmtTime(event.jamaah));
+    notify(event.name + ' iqamah in ' + mins + ' min', 'Iqamah at ' + fmtTime(event.jamaah));
     if (mode !== 'off') chime(2);
-    toast(event.name + ' jamaah in ' + mins + ' minutes');
+    toast(event.name + ' iqamah in ' + mins + ' minutes');
     return;
   }
   notify(event.name, 'It is now ' + fmtTime(event.minutes) + ' — time for ' + event.name + '.');
@@ -645,7 +683,7 @@ function renderToday() {
     (meta.notes && meta.notes.length) ? meta.notes.join(' · ') : '';
   document.getElementById('foregroundNote').textContent = audioReady
     ? 'The Azan plays while this app is open. A closed app cannot play audio on a phone — keep a clock alarm as a backstop.'
-    : 'Tap “Enable sound” above so the Azan can play.';
+    : 'Tap “Turn on” at the top of the board so the Azan can play.';
 }
 
 // The board counts down to the adhan, then - once the adhan has passed and
@@ -878,7 +916,8 @@ function wire() {
   document.querySelectorAll('#menu button').forEach(b => { b.onclick = () => showView(b.dataset.v); });
   document.querySelectorAll('.topbar button.back').forEach(b => { b.onclick = () => showView('today'); });
 
-  document.getElementById('unlockBtn').onclick = () => { unlockAudio(); chime(1); renderToday(); };
+  document.getElementById('unlockBtn').onclick = armAlerts;
+  document.getElementById('soundChip').onclick = armAlerts;
   document.getElementById('testBtn').onclick = () => { unlockAudio(); setTimeout(playAzan, 120); };
   document.getElementById('stopBtn').onclick = stopAudio;
 
@@ -909,6 +948,7 @@ function wire() {
     if (!('Notification' in window)) { toast('Notifications are not supported here'); return; }
     const perm = await Notification.requestPermission();
     renderSettings();
+    updateAlertBar();
     if (perm === 'granted') notify('Azan notifications on', 'You will be alerted at prayer times while the app is open.');
   };
 
@@ -984,10 +1024,17 @@ function wire() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { lastDate = ''; renderAll(); applyWakeLock(); }
   });
-  document.addEventListener('pointerdown', function once() {
-    if (!audioReady) unlockAudio();
+  // Any tap on the board also unlocks audio. Taps on the alert controls are
+  // left alone: hiding the bar on pointerdown would pull the button out from
+  // under the finger, and the click - which is what asks for notification
+  // permission - would never land.
+  document.addEventListener('pointerdown', function once(ev) {
+    const onControl = ev.target && ev.target.closest &&
+      ev.target.closest('#audioBanner, #soundChip, #notifBtn, #testBtn');
+    if (onControl) return;
+    if (!audioReady) { unlockAudio(); updateAlertBar(); }
     document.removeEventListener('pointerdown', once);
-  }, { once: true });
+  });
 }
 
 (async function boot() {
@@ -996,7 +1043,7 @@ function wire() {
   await loadAzanAudio();
   renderAll();
   renderClock();
-  document.getElementById('audioBanner').classList.toggle('show', !audioReady);
+  updateAlertBar();
   setInterval(tick, 1000);
   tick();
   applyWakeLock();

@@ -92,7 +92,14 @@ ul.times li.current .pname,ul.times li.current .t{
 .foot{display:flex;align-items:center;gap:8px;padding:9px 14px 14px;font-size:14px;color:var(--ink-2)}
 .foot .l{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
 .foot .m{flex:0 0 auto;font-weight:500;color:var(--ink);font-size:15px}
-.foot .r{flex:1;display:flex;justify-content:flex-end}
+.foot .r{flex:1;display:flex;justify-content:flex-end;align-items:center;gap:10px}
+#soundChip{font-size:16px;line-height:1;padding:2px}
+.alertbar{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin:0 14px 8px;padding:9px 12px;border-radius:10px;font-size:13px;
+  background:#fdf0dc;border:1px solid #d8a54b;color:#7a5310}
+.alertbar[hidden]{display:none}
+.alertbar button{background:var(--ink);color:#f7f5ef;font-weight:600;border-radius:8px;
+  padding:7px 13px;font-size:13px;white-space:nowrap}
 #menuBtn svg{width:22px;height:22px;display:block;color:var(--ink-2)}
 
 /* ---------------- menu sheet ---------------- */
@@ -208,6 +215,11 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
       <div class="clock" id="clock">-:--:--</div>
     </div>
 
+    <div class="alertbar" id="audioBanner" hidden>
+      <span id="alertText">Sound and alerts are off</span>
+      <button id="unlockBtn">Turn on</button>
+    </div>
+
     <div class="thead"><span class="c1">PRAYER</span><span class="c2">ADHAN</span><span class="c3">IQAMAH</span></div>
     <ul class="times" id="todayList"></ul>
 
@@ -221,6 +233,7 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
       <span class="l" id="cdLabel">Today @ Dublin ·</span>
       <span class="m" id="locBox">—</span>
       <span class="r">
+        <button id="soundChip" aria-label="Sound and alerts">🔇</button>
         <button id="menuBtn" aria-label="Menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
@@ -234,10 +247,6 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
       Import the mosque's timetable in Settings → Timetable.
     </div>
     <div class="banner info" id="coverBanner"></div>
-    <div class="banner audio" id="audioBanner">
-      <span>Tap once to allow the Azan to play.</span>
-      <button id="unlockBtn">Enable sound</button>
-    </div>
     <div class="card jummah" id="jummahCard" style="display:none">
       <div class="row" style="border:0;padding:0 0 8px"><div class="k">Jummah — first khutba</div><span class="v" id="jum1">—</span></div>
       <div class="row" style="border:0;padding:0"><div class="k">Jummah — second khutba</div><span class="v" id="jum2">—</span></div>
