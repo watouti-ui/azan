@@ -1,7 +1,7 @@
 {
-  "name": "Shaheed Bilal Masjid \u2014 Prayer Times",
-  "short_name": "Azan",
-  "description": "Adhan and iqamah times for Shaheed Bilal Masjid, Dublin 15.",
+  "name": "Shaheed Bilal Mosque",
+  "short_name": "Shaheed Bilal",
+  "description": "Prayer times for Shaheed Bilal Mosque, Dublin 15 \u2014 adhan and iqamah, as on the mosque board.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

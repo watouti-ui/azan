@@ -34,12 +34,7 @@ def main() -> None:
     script = (ROOT / "app.js").read_text(encoding="utf-8")
     timetable = json.loads((ROOT / "data" / "timetable.json").read_text(encoding="utf-8"))
 
-    # Name the file after the mosque it carries, so a published copy is
-    # identifiable; fall back to the app's own title.
     title = extract(r"<title>(.*?)</title>", html, "<title>")
-    mosque = (timetable.get("meta") or {}).get("name")
-    if mosque:
-        title = f"{mosque} {title}"
 
     style = extract(r"<style>(.*?)</style>", html, "<style>")
     body = extract(r"<body>(.*?)</body>", html, "<body>")

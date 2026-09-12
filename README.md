@@ -1,4 +1,4 @@
-# Azan — prayer times from your own timetable
+# Shaheed Bilal Mosque — prayer times
 
 A self-contained web app (PWA) built as a replica of the mosque's own display
 board — same arch, clock, adhan and iqamah columns, countdown and footer — with
