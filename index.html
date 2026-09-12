@@ -44,8 +44,11 @@ button{cursor:pointer;border:0;background:none}
     repeating-linear-gradient(-45deg, rgba(190,180,158,.16) 0 2px, transparent 2px 11px),
     linear-gradient(180deg,#e9e2d4,#efe9dd 55%,#e6dfd0);
 }
-.crown{position:relative;padding:10px 16px 14px}
-.crown .archline{position:absolute;left:6px;right:6px;top:0;bottom:0;width:auto;height:auto;z-index:0}
+.crown{position:relative;padding:10px 16px 22px}
+/* Both dimensions are set explicitly: leaving either to auto lets the viewBox
+   ratio drive it and the other offset is dropped, which left the arch either
+   spilling past the crown or short of its right edge. */
+.crown .archline{position:absolute;left:6px;top:0;width:calc(100% - 12px);height:100%;z-index:0}
 .dates{position:relative;display:flex;justify-content:space-between;align-items:flex-start;z-index:2}
 .dstack{font-size:13px;line-height:1.2;color:var(--ink-2);font-weight:500;min-width:56px}
 .dstack b{display:block;font-size:30px;line-height:1.06;font-weight:700;color:var(--ink);margin:1px 0}
@@ -53,8 +56,8 @@ button{cursor:pointer;border:0;background:none}
 .mark{position:absolute;left:50%;transform:translateX(-50%);top:12px;width:44px;z-index:2}
 .mark svg{display:block;width:100%;height:auto}
 .clock{
-  position:relative;z-index:2;text-align:center;margin:14px 0 2px;
-  font-size:clamp(42px,14vw,62px);font-weight:800;letter-spacing:.005em;
+  position:relative;z-index:2;text-align:center;margin:16px 0 4px;line-height:1.08;
+  font-size:clamp(40px,13vw,58px);font-weight:800;letter-spacing:.005em;
   font-variant-numeric:tabular-nums;color:var(--gold);
   -webkit-text-stroke:1.5px var(--gold-2);
   text-shadow:0 2px 0 rgba(157,127,63,.35), 0 3px 6px rgba(120,95,45,.18);
@@ -186,10 +189,15 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
 <section class="view on" id="v-today">
   <div class="board">
     <div class="crown">
-      <svg class="archline" viewBox="0 0 100 46" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M3 46 L3 33 C3 26 10 24.5 16 24.5 C24 24.5 28 20 30 15 C32 9.5 40 6 45 3.6 L50 0
-                 L55 3.6 C60 6 68 9.5 70 15 C72 20 76 24.5 84 24.5 C90 24.5 97 26 97 33 L97 46 Z"
-              fill="#fbfaf7" stroke="#c7c0b1" stroke-width="0.5" vector-effect="non-scaling-stroke"/>
+      <svg class="archline" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
+        <!-- Filled shape and outline are separate: the outline stops at the two
+             bottom corners, so no line is stroked across under the clock. -->
+        <path d="M3 60 L3 40 C3 31 10 29 16 29 C24 29 28 24 30 18 C32 11 40 7 45 4.2 L50 0
+                 L55 4.2 C60 7 68 11 70 18 C72 24 76 29 84 29 C90 29 97 31 97 40 L97 60 Z"
+              fill="#fbfaf7" stroke="none"/>
+        <path d="M3 60 L3 40 C3 31 10 29 16 29 C24 29 28 24 30 18 C32 11 40 7 45 4.2 L50 0
+                 L55 4.2 C60 7 68 11 70 18 C72 24 76 29 84 29 C90 29 97 31 97 40 L97 60"
+              fill="none" stroke="#c7c0b1" stroke-width="0.5" vector-effect="non-scaling-stroke"/>
       </svg>
       <div class="dates">
         <div class="dstack" id="todayDate">—</div>
