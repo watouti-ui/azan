@@ -92,11 +92,14 @@ ul.times li.current .pname,ul.times li.current .t{
 .upnext .cd{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--blue-ink)}
 .progress{height:9px;margin:0 14px;border-radius:5px;background:#dcd6c8;overflow:hidden}
 .progress i{display:block;height:100%;background:linear-gradient(90deg,#79c6ea,#a9dcf3);width:100%}
-.foot{display:flex;align-items:center;gap:8px;padding:9px 14px 14px;font-size:14px;color:var(--ink-2)}
+.foot{display:flex;align-items:center;gap:8px;padding:9px 14px 10px;font-size:14px;color:var(--ink-2)}
 .foot .l{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
 .foot .m{flex:0 0 auto;font-weight:500;color:var(--ink);font-size:15px}
-.foot .r{flex:1;display:flex;justify-content:flex-end;align-items:center;gap:10px}
-#soundChip{font-size:16px;line-height:1;padding:2px}
+.foot .r{flex:1;display:flex;justify-content:flex-end;align-items:center}
+.soundrow{padding:0 14px 14px}
+.soundrow button{width:100%;padding:11px;border-radius:10px;font-size:14px;font-weight:600;
+  background:#fff;border:1px solid var(--row-line);color:var(--ink)}
+.soundrow button.muted{background:#eaf4fb;border-color:#a8cfe6;color:var(--blue-ink)}
 .alertbar{display:flex;align-items:center;justify-content:space-between;gap:10px;
   margin:0 14px 8px;padding:9px 12px;border-radius:10px;font-size:13px;
   background:#fdf0dc;border:1px solid #d8a54b;color:#7a5310}
@@ -176,7 +179,7 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
 .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .note{font-size:12px;color:var(--ink-soft);line-height:1.5;margin:8px 4px 0}
 .pill{font-size:11px;padding:3px 8px;border-radius:999px;background:#fff;border:1px solid var(--row-line);color:var(--ink-soft)}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:26px;background:var(--ink);color:#f7f5ef;
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(112px + env(safe-area-inset-bottom));background:var(--ink);color:#f7f5ef;
   padding:10px 16px;border-radius:10px;font-size:13px;z-index:70;opacity:0;pointer-events:none;transition:opacity .2s;
   max-width:88vw;text-align:center}
 .toast.show{opacity:1}
@@ -224,7 +227,7 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
     </div>
 
     <div class="alertbar" id="audioBanner" hidden>
-      <span id="alertText">Sound and alerts are off</span>
+      <span id="alertText">Notifications are off</span>
       <button id="unlockBtn">Turn on</button>
     </div>
 
@@ -241,12 +244,12 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
       <span class="l" id="cdLabel">Today @ Dublin ·</span>
       <span class="m" id="locBox">—</span>
       <span class="r">
-        <button id="soundChip" aria-label="Sound and alerts">🔇</button>
         <button id="menuBtn" aria-label="Menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
       </span>
     </div>
+    <div class="soundrow"><button id="soundToggle">Enable sounds</button></div>
   </div>
 
   <div class="notices">

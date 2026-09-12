@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -77,7 +77,7 @@ const LS = {
 const DEFAULT_SETTINGS = {
   sound: { fajr: 'azan', sunrise: 'off', dhuhr: 'azan', asr: 'azan', maghrib: 'azan', isha: 'azan' },
   offsets: { fajr: 0, sunrise: 0, dhuhr: 0, asr: 0, maghrib: 0, isha: 0 },
-  use24: true, pre: 0, jam: 0, wake: false
+  use24: true, pre: 0, jam: 0, wake: false, muted: false
 };
 
 let settings = Object.assign({}, DEFAULT_SETTINGS, LS.get('azan.settings', {}));
@@ -446,43 +446,49 @@ async function loadAzanAudio() {
     : 'Built-in chime (no audio file added)';
 }
 
-function alertsArmed() {
-  const notif = ('Notification' in window) ? Notification.permission : 'unsupported';
-  return audioReady && (notif === 'granted' || notif === 'unsupported' || notif === 'denied');
+function notifState() {
+  return ('Notification' in window) ? Notification.permission : 'unsupported';
 }
 
-function updateAlertBar() {
+// Notifications and sound are separate: plenty of people want to be told a
+// prayer has come in without the Azan playing out loud.
+function updateAlerts() {
   const bar = document.getElementById('audioBanner');
-  const chip = document.getElementById('soundChip');
-  if (!bar) return;
-  const notif = ('Notification' in window) ? Notification.permission : 'unsupported';
-  const needAudio = !audioReady;
-  const needNotif = notif === 'default';
-  bar.hidden = !(needAudio || needNotif);
-  document.getElementById('alertText').textContent =
-    needAudio && needNotif ? 'Sound and alerts are off'
-    : needAudio ? 'Sound is off — the Azan will not play'
+  const btn = document.getElementById('soundToggle');
+  if (!bar || !btn) return;
+  const state = notifState();
+
+  bar.hidden = (state === 'granted' || state === 'unsupported');
+  document.getElementById('alertText').textContent = state === 'denied'
+    ? 'Notifications are blocked in your browser settings'
     : 'Notifications are off';
-  if (chip) {
-    chip.textContent = audioReady ? (notif === 'granted' ? '🔔' : '🔊') : '🔇';
-    chip.title = audioReady
-      ? (notif === 'granted' ? 'Sound and notifications on' : 'Sound on, notifications off')
-      : 'Tap to turn sound on';
-  }
+  document.getElementById('unlockBtn').hidden = (state === 'denied');
+
+  btn.textContent = settings.muted ? 'Enable sounds' : 'Disable sounds';
+  btn.classList.toggle('muted', !!settings.muted);
 }
 
-// One tap arms everything: the browser needs a gesture before it will play
-// audio, and notification permission has to be asked for from one too.
-async function armAlerts() {
-  unlockAudio();
-  if ('Notification' in window && Notification.permission === 'default') {
-    try { await Notification.requestPermission(); } catch (e) {}
+async function armNotifications() {
+  if (!('Notification' in window)) { toast('Notifications are not supported here'); return; }
+  try { await Notification.requestPermission(); } catch (e) {}
+  updateAlerts();
+  renderSettings();
+  toast(notifState() === 'granted' ? 'Notifications on' : 'Notifications not allowed');
+}
+
+function toggleSound() {
+  settings.muted = !settings.muted;
+  saveSettings();
+  if (settings.muted) {
+    stopAudio();
+  } else {
+    unlockAudio();   // the browser needs this gesture before it will ever play
+    chime(1);        // and a short confirmation proves it works
   }
-  chime(1);
-  updateAlertBar();
+  updateAlerts();
   renderToday();
   renderSettings();
-  toast(alertsArmed() ? 'Alerts on' : 'Sound on');
+  toast(settings.muted ? 'Sounds off — notifications only' : 'Sounds on');
 }
 
 function unlockAudio() {
@@ -563,7 +569,7 @@ function fire(event, kind) {
   const id = kind + ':' + event.date + ':' + event.key;
   if (alreadyFired(id)) return;
   markFired(id);
-  const mode = settings.sound[event.key] || 'off';
+  const mode = settings.muted ? 'off' : (settings.sound[event.key] || 'off');
 
   if (kind === 'pre') {
     notify(event.name + ' in ' + settings.pre + ' min', event.name + ' at ' + fmtTime(event.minutes));
@@ -681,9 +687,9 @@ function renderToday() {
 
   document.getElementById('mosqueNotes').textContent =
     (meta.notes && meta.notes.length) ? meta.notes.join(' · ') : '';
-  document.getElementById('foregroundNote').textContent = audioReady
-    ? 'The Azan plays while this app is open. A closed app cannot play audio on a phone — keep a clock alarm as a backstop.'
-    : 'Tap “Turn on” at the top of the board so the Azan can play.';
+  document.getElementById('foregroundNote').textContent = settings.muted
+    ? 'Sounds are off — prayer times still show a notification. Turn sounds back on below to hear the Azan.'
+    : 'The Azan plays while this app is open. A closed app cannot play audio on a phone — keep a clock alarm as a backstop.';
 }
 
 // The board counts down to the adhan, then - once the adhan has passed and
@@ -916,8 +922,8 @@ function wire() {
   document.querySelectorAll('#menu button').forEach(b => { b.onclick = () => showView(b.dataset.v); });
   document.querySelectorAll('.topbar button.back').forEach(b => { b.onclick = () => showView('today'); });
 
-  document.getElementById('unlockBtn').onclick = armAlerts;
-  document.getElementById('soundChip').onclick = armAlerts;
+  document.getElementById('unlockBtn').onclick = armNotifications;
+  document.getElementById('soundToggle').onclick = toggleSound;
   document.getElementById('testBtn').onclick = () => { unlockAudio(); setTimeout(playAzan, 120); };
   document.getElementById('stopBtn').onclick = stopAudio;
 
@@ -948,7 +954,7 @@ function wire() {
     if (!('Notification' in window)) { toast('Notifications are not supported here'); return; }
     const perm = await Notification.requestPermission();
     renderSettings();
-    updateAlertBar();
+    updateAlerts();
     if (perm === 'granted') notify('Azan notifications on', 'You will be alerted at prayer times while the app is open.');
   };
 
@@ -1030,9 +1036,9 @@ function wire() {
   // permission - would never land.
   document.addEventListener('pointerdown', function once(ev) {
     const onControl = ev.target && ev.target.closest &&
-      ev.target.closest('#audioBanner, #soundChip, #notifBtn, #testBtn');
+      ev.target.closest('#audioBanner, #soundToggle, #notifBtn, #testBtn');
     if (onControl) return;
-    if (!audioReady) { unlockAudio(); updateAlertBar(); }
+    if (!audioReady) { unlockAudio(); updateAlerts(); }
     document.removeEventListener('pointerdown', once);
   });
 }
@@ -1043,7 +1049,7 @@ function wire() {
   await loadAzanAudio();
   renderAll();
   renderClock();
-  updateAlertBar();
+  updateAlerts();
   setInterval(tick, 1000);
   tick();
   applyWakeLock();
