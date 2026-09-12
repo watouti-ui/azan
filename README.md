@@ -171,8 +171,10 @@ Works:
 - Follows the board's conventions: 24-hour times with no leading zero, the
   countdown switching to "<PRAYER> IQAMAH" once the adhan has passed, the table
   switching to tomorrow after Isha, and the "Today @ ..." footer
-- The board's Hijri date runs one day ahead of the Hijri column on the printed
-  sheet, so the app shows the next day's entry to match it
+- The Hijri date is computed with the Umm al-Qura calendar, which reproduces
+  hijri-calendar.com exactly (checked on 1, 7, 12 and 30 September 2026). It
+  needs no transcription, so future months carry it automatically. Note this
+  can differ from the mosque board by a day around a month end
 - Full month table, any month, switchable between begins and jamaah
 - Azan or chime per prayer, individually settable
 - Per-prayer adjustment of −60 to +60 minutes (begins times only — jamaah times

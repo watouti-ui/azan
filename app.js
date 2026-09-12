@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -18,9 +18,14 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// Short forms for the Hijri months, matched loosely against whatever spelling
-// the timetable uses.
-const HIJRI_SHORT = [
+// Umm al-Qura, which is what hijri-calendar.com publishes: it matches that
+// site on 1, 7, 12 and 30 September 2026, including Rabi' al-Awwal ending at
+// 29 days. Computed rather than transcribed, so future months need no entry.
+const HIJRI_SHORT = ['Muh', 'Saf', 'Rab1', 'Rab2', 'Jum1', 'Jum2',
+                     'Raj', 'Sha', 'Ram', 'Shw', 'Qad', 'Hij'];
+
+// Older spellings, for the hijri strings carried in a timetable file.
+const HIJRI_PATTERNS = [
   [/muharram/i, 'Muh'], [/safar/i, 'Saf'],
   [/rabi.*(akhir|thani|ii\b|2)/i, 'Rab2'], [/rabi/i, 'Rab1'],
   [/jumada.*(akhir|thani|ii\b|2)/i, 'Jum2'], [/jumada/i, 'Jum1'],
@@ -28,25 +33,33 @@ const HIJRI_SHORT = [
   [/qa.?d/i, 'Qad'], [/hijj/i, 'Hij']
 ];
 
-function hijriParts(text) {
+function hijriFromText(text) {
   if (!text) return null;
   const day = (String(text).match(/\d{1,2}/) || [''])[0];
   let month = String(text).replace(/\d+/g, '').trim();
-  for (const [re, short] of HIJRI_SHORT) if (re.test(month)) { month = short; break; }
-  return { day: day, month: month };
+  for (const [re, short] of HIJRI_PATTERNS) if (re.test(month)) { month = short; break; }
+  return { day: day, month: month, year: '' };
 }
 
-// The board's Hijri date runs one day ahead of the Hijri column on the printed
-// sheet: on 7 Sep (sheet: 24) it read 25, and on 8 Sep (sheet: 25) it read 26.
-// So take the next day's entry, falling back to bumping today's day number
-// when the timetable stops at a month end.
-function boardHijri(t) {
-  const next = addDays(t, 1);
-  const ahead = dayEntry(next.m, next.d);
-  if (ahead && ahead.hijri) return ahead.hijri;
-  const here = dayEntry(t.m, t.d);
-  if (!here || !here.hijri) return null;
-  return String(here.hijri).replace(/^(\s*)(\d{1,2})/, (m, sp, d) => sp + (+d + 1));
+function hijriParts(t) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+      timeZone: 'UTC', day: 'numeric', month: 'numeric', year: 'numeric'
+    }).formatToParts(new Date(Date.UTC(t.y, t.m - 1, t.d, 12)))
+      .reduce((acc, p) => (acc[p.type] = p.value, acc), {});
+    const month = parseInt(parts.month, 10);
+    const day = parseInt(parts.day, 10);
+    if (!month || !day) throw new Error('no islamic calendar');
+    return {
+      day: String(day),
+      month: HIJRI_SHORT[month - 1] || String(month),
+      year: String(parts.year).replace(/\D/g, '')
+    };
+  } catch (e) {
+    // No Umm al-Qura support: fall back to whatever the timetable carries.
+    const entry = dayEntry(t.m, t.d);
+    return entry ? hijriFromText(entry.hijri) : null;
+  }
 }
 
 function addDays(t, n) {
@@ -637,9 +650,9 @@ function renderToday() {
   document.getElementById('todayDate').innerHTML =
     MONTHS_SHORT[t.m - 1] + '<b>' + t.d + '</b>' + t.y;
 
-  const hijri = hijriParts(boardHijri(t));
+  const hijri = hijriParts(t);
   document.getElementById('todayHijri').innerHTML = hijri
-    ? hijri.month + '<b>' + hijri.day + '</b>' + (meta.hijriYear || '')
+    ? hijri.month + '<b>' + hijri.day + '</b>' + (hijri.year || meta.hijriYear || '')
     : '';
 
   const list = document.getElementById('todayList');
@@ -1054,6 +1067,16 @@ function wire() {
   tick();
   applyWakeLock();
   if (!window.__AZAN_STANDALONE__ && 'serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // updateViaCache:'none' stops the browser serving a cached worker, and the
+    // reload below picks up a new one without anyone clearing site data.
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then(reg => { reg.update().catch(() => {}); })
+      .catch(() => {});
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
+    });
   }
 })();
