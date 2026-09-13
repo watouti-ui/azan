@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -769,7 +769,7 @@ function renderHeader() {
     cover.classList.remove('show');
   } else {
     cover.innerHTML = '<b>Covers ' + months.map(m => MONTHS[m - 1]).join(', ') +
-      ' only.</b><br>Other dates show as unavailable until the remaining months are added.';
+      ' only.</b> Other dates show as unavailable until the remaining months are added.';
     cover.classList.add('show');
   }
 }
@@ -831,9 +831,9 @@ function renderToday() {
     document.getElementById('jum1').textContent = fmtTime(toMinutes(meta.jummah[0]));
     document.getElementById('jum2').textContent =
       meta.jummah[1] ? fmtTime(toMinutes(meta.jummah[1])) : '—';
-    jummahCard.style.display = '';
+    jummahCard.hidden = false;
   } else {
-    jummahCard.style.display = 'none';
+    jummahCard.hidden = true;
   }
 
   document.getElementById('mosqueNotes').textContent =
