@@ -44,58 +44,63 @@ button{cursor:pointer;border:0;background:none}
     repeating-linear-gradient(-45deg, rgba(190,180,158,.16) 0 2px, transparent 2px 11px),
     linear-gradient(180deg,#e9e2d4,#efe9dd 55%,#e6dfd0);
 }
-.crown{position:relative;padding:10px 16px 22px}
+.crown{position:relative;padding:clamp(8px,2.4vw,16px) 16px clamp(20px,5vw,34px)}
 /* Both dimensions are set explicitly: leaving either to auto lets the viewBox
    ratio drive it and the other offset is dropped, which left the arch either
    spilling past the crown or short of its right edge. */
-.crown .archline{position:absolute;left:6px;top:0;width:calc(100% - 12px);height:100%;z-index:0}
+.crown .archline{position:absolute;left:2px;top:0;width:calc(100% - 4px);height:100%;z-index:0}
 .dates{position:relative;display:flex;justify-content:space-between;align-items:flex-start;z-index:2}
-.dstack{font-size:13px;line-height:1.2;color:var(--ink-2);font-weight:500;min-width:56px}
-.dstack b{display:block;font-size:30px;line-height:1.06;font-weight:700;color:var(--ink);margin:1px 0}
+.dstack{font-size:clamp(12px,3.4vw,15px);line-height:1.2;color:var(--ink-2);font-weight:500;min-width:52px}
+.dstack b{display:block;font-size:clamp(26px,8vw,40px);line-height:1.04;font-weight:700;color:var(--ink);margin:1px 0}
 .dstack.right{text-align:right}
-.mark{position:absolute;left:50%;transform:translateX(-50%);top:12px;width:44px;z-index:2}
+.mark{position:absolute;left:50%;transform:translateX(-50%);top:clamp(22px,6.5vw,44px);
+  width:clamp(44px,12vw,68px);z-index:2}
 .mark svg{display:block;width:100%;height:auto}
 .clock{
-  position:relative;z-index:2;text-align:center;margin:16px 0 4px;line-height:1.08;
-  font-size:clamp(40px,13vw,58px);font-weight:800;letter-spacing:.005em;
+  position:relative;z-index:2;text-align:center;line-height:1.05;
+  margin:clamp(60px,19vw,116px) 0 clamp(2px,1vw,8px);
+  font-size:clamp(46px,17.5vw,92px);font-weight:800;letter-spacing:.005em;
   font-variant-numeric:tabular-nums;color:var(--gold);
   -webkit-text-stroke:1.5px var(--gold-2);
   text-shadow:0 2px 0 rgba(157,127,63,.35), 0 3px 6px rgba(120,95,45,.18);
 }
 
-.thead{display:flex;align-items:center;gap:8px;margin:0 14px;padding:7px 4px;
+.thead{display:flex;align-items:center;gap:8px;margin:0 12px;padding:7px 6px;
   border-top:1.5px solid var(--rule);border-bottom:1.5px solid var(--rule);
   font-size:13px;color:var(--ink-2);font-weight:500;letter-spacing:.02em}
 .thead .c1{flex:1}
-.thead .c2,.thead .c3{width:92px;text-align:center}
+.thead .c2,.thead .c3{width:clamp(74px,23vw,116px);text-align:center}
 
-ul.times{list-style:none;margin:0;padding:6px 12px;flex:1}
-ul.times li{position:relative;display:flex;align-items:center;gap:8px;padding:17px 8px;
-  border-radius:12px;margin-bottom:5px;overflow:hidden;
-  background:linear-gradient(180deg,var(--row-a),var(--row-b));border:1px solid var(--row-line)}
+ul.times{list-style:none;margin:0;padding:4px 10px;flex:1}
+ul.times li{position:relative;display:flex;align-items:center;gap:8px;
+  padding:clamp(13px,3.4vw,20px) 8px;border-radius:10px;margin-bottom:2px;overflow:hidden;
+  background:linear-gradient(180deg,#fdfdfb,#f0eee8)}
 ul.times li:last-child{margin-bottom:0}
-ul.times li.passed .pname,ul.times li.passed .t{opacity:.62}
-ul.times li.current{background:linear-gradient(100deg,#8fd0ee,#c9e8f8 62%,#bfe3f6);
-  border-color:#7cbfe0}
-ul.times li.current:before{content:"";position:absolute;left:0;top:0;bottom:0;width:9px;
-  border-radius:12px 0 0 12px;background:var(--blue-cap)}
+ul.times li.passed .pname,ul.times li.passed .t{opacity:.6}
+ul.times li.current{background:linear-gradient(100deg,#aadff5,#c9ecfb 55%,#bce6f8)}
+ul.times li.current:before{content:"";position:absolute;left:0;top:0;bottom:0;width:10px;
+  border-radius:10px 0 0 10px;background:var(--blue-cap)}
 ul.times li.current .pname,ul.times li.current .t{
   color:var(--blue-ink);opacity:1;text-shadow:0 1px 0 rgba(255,255,255,.75)}
-.pname{flex:1;font-weight:500;letter-spacing:.03em;text-transform:uppercase;font-size:20px;min-width:0;padding-left:8px}
-.t{width:92px;text-align:center;font-variant-numeric:tabular-nums;font-size:28px;font-weight:400;color:var(--ink)}
-.t.wide{width:184px}
-.t.none{color:var(--ink-soft);font-size:19px}
+.pname{flex:1;font-weight:500;letter-spacing:.03em;text-transform:uppercase;
+  font-size:clamp(16px,4.6vw,23px);min-width:0;padding-left:clamp(6px,2.4vw,14px)}
+.t{width:clamp(74px,23vw,116px);text-align:center;font-variant-numeric:tabular-nums;
+  font-size:clamp(22px,6.6vw,34px);font-weight:400;color:var(--ink)}
+.t.wide{width:calc(2 * clamp(74px,23vw,116px))}
+.t.none{color:var(--ink-soft);font-size:clamp(16px,4.4vw,22px)}
 .snd{display:none}
 
 .upnext{display:flex;align-items:baseline;justify-content:center;gap:12px;padding:10px 16px 8px}
-.upnext .n{font-size:21px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink)}
-.upnext .cd{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--blue-ink)}
+.upnext .n{font-size:clamp(18px,5.2vw,26px);font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink)}
+.upnext .cd{font-size:clamp(18px,5.4vw,27px);font-weight:600;font-variant-numeric:tabular-nums;
+  color:var(--blue-ink)}
 .progress{height:9px;margin:0 14px;border-radius:5px;background:#dcd6c8;overflow:hidden}
-.progress i{display:block;height:100%;background:linear-gradient(90deg,#79c6ea,#a9dcf3);width:100%}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,#4fb3e0,#8fd4f2);width:0;transition:width .4s linear}
 .foot{display:flex;align-items:center;gap:8px;padding:9px 14px 10px;font-size:14px;color:var(--ink-2)}
-.foot .l{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
-.foot .m{flex:0 0 auto;font-weight:500;color:var(--ink);font-size:15px}
-.foot .r{flex:1;display:flex;justify-content:flex-end;align-items:center}
+.foot .l{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(11px,3.2vw,14px)}
+.foot .m{flex:1 1 auto;min-width:0;text-align:center;font-weight:500;color:var(--ink);font-size:clamp(12px,3.6vw,16px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.foot .r{flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center}
 .soundrow{padding:0 14px 14px}
 .soundrow button{width:100%;padding:11px;border-radius:10px;font-size:14px;font-weight:600;
   background:#fff;border:1px solid var(--row-line);color:var(--ink)}
@@ -179,6 +184,20 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
 .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .note{font-size:12px;color:var(--ink-soft);line-height:1.5;margin:8px 4px 0}
 .pill{font-size:11px;padding:3px 8px;border-radius:999px;background:#fff;border:1px solid var(--row-line);color:var(--ink-soft)}
+.inapp{position:fixed;left:50%;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:12px;
+  top:calc(10px + env(safe-area-inset-top));width:min(520px,calc(100vw - 20px));
+  background:var(--blue-2);border:1px solid #7cbfe0;border-radius:14px;padding:12px 14px;
+  box-shadow:0 10px 30px rgba(30,50,70,.22)}
+.inapp[hidden]{display:none}
+/* On the inner pages the banner must not sit on top of the back button. */
+body.inner .inapp{top:calc(62px + env(safe-area-inset-top))}
+.topbar{z-index:85}
+.inapp .ia-body{flex:1;min-width:0}
+.inapp b{display:block;font-size:16px;color:var(--blue-ink)}
+.inapp span{font-size:13px;color:var(--ink-2)}
+.inapp button{flex:0 0 auto;font-size:22px;line-height:1;color:var(--ink-2);padding:2px 6px}
+.diag{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;
+  background:#f6f4ee;border:1px solid var(--row-line);border-radius:10px;padding:10px;margin-top:10px;color:var(--ink-2)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(112px + env(safe-area-inset-bottom));background:var(--ink);color:#f7f5ef;
   padding:10px 16px;border-radius:10px;font-size:13px;z-index:70;opacity:0;pointer-events:none;transition:opacity .2s;
   max-width:88vw;text-align:center}
@@ -192,15 +211,31 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
 <section class="view on" id="v-today">
   <div class="board">
     <div class="crown">
-      <svg class="archline" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
-        <!-- Filled shape and outline are separate: the outline stops at the two
-             bottom corners, so no line is stroked across under the clock. -->
-        <path d="M3 60 L3 40 C3 31 10 29 16 29 C24 29 28 24 30 18 C32 11 40 7 45 4.2 L50 0
-                 L55 4.2 C60 7 68 11 70 18 C72 24 76 29 84 29 C90 29 97 31 97 40 L97 60 Z"
-              fill="#fbfaf7" stroke="none"/>
-        <path d="M3 60 L3 40 C3 31 10 29 16 29 C24 29 28 24 30 18 C32 11 40 7 45 4.2 L50 0
-                 L55 4.2 C60 7 68 11 70 18 C72 24 76 29 84 29 C90 29 97 31 97 40 L97 60"
-              fill="none" stroke="#c7c0b1" stroke-width="0.5" vector-effect="non-scaling-stroke"/>
+      <svg class="archline" viewBox="0 0 100 62" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <pattern id="archfill" width="7" height="7" patternUnits="userSpaceOnUse">
+            <path d="M3.5 0 L7 3.5 L3.5 7 L0 3.5 Z" fill="#eceadf" opacity=".55"/>
+          </pattern>
+        </defs>
+        <!-- Fill and outline are separate paths: the outline runs up one side,
+             over the peak and down the other and stops at the bottom corners,
+             so nothing is stroked across underneath the clock. -->
+        <path id="archShape"
+              d="M2 62 L2 36 C2 28 9 25 18 25 C26 25 29 21 30 16
+                 C31 8 41 3 46 1 L50 0 L54 1 C59 3 69 8 70 16
+                 C71 21 74 25 82 25 C91 25 98 28 98 36 L98 62 Z"
+              fill="#fbfaf7"/>
+        <use href="#archShape" fill="url(#archfill)"/>
+        <path d="M2 62 L2 36 C2 28 9 25 18 25 C26 25 29 21 30 16
+                 C31 8 41 3 46 1 L50 0 L54 1 C59 3 69 8 70 16
+                 C71 21 74 25 82 25 C91 25 98 28 98 36 L98 62"
+              fill="none" stroke="#c0b9a8" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        <g transform="translate(50 33) scale(0.93 0.88) translate(-50 -33)">
+          <path d="M2 62 L2 36 C2 28 9 25 18 25 C26 25 29 21 30 16
+                   C31 8 41 3 46 1 L50 0 L54 1 C59 3 69 8 70 16
+                   C71 21 74 25 82 25 C91 25 98 28 98 36 L98 62"
+                fill="none" stroke="#cfc8b8" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        </g>
       </svg>
       <div class="dates">
         <div class="dstack" id="todayDate">—</div>
@@ -324,6 +359,19 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
       </div>
     </div>
 
+    <h2>Notification diagnostics</h2>
+    <div class="card">
+      <div class="row">
+        <div class="k">Status<small id="diagSummary">—</small></div>
+        <button class="btn sec" id="diagRefresh">Refresh</button>
+      </div>
+      <div class="btns">
+        <button class="btn" id="testNotifBtn">Send test notification</button>
+        <button class="btn sec" id="installHelpBtn">Why no lock-screen alerts?</button>
+      </div>
+      <div class="diag" id="diagLog">—</div>
+    </div>
+
     <h2>Azan audio</h2>
     <div class="card">
       <div class="row">
@@ -391,6 +439,11 @@ table.month tr.fri td:first-child{color:var(--blue-ink);font-weight:700}
     </div>
   </div>
 </section>
+
+<div class="inapp" id="inAppAlert" hidden>
+  <div class="ia-body"><b id="inAppTitle">—</b><span id="inAppText"></span></div>
+  <button id="inAppClose" aria-label="Dismiss">&times;</button>
+</div>
 
 <div class="scrim" id="scrim" hidden></div>
 <div class="sheet" id="menu" hidden>

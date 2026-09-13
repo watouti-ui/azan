@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -459,6 +459,116 @@ async function loadAzanAudio() {
     : 'Built-in chime (no audio file added)';
 }
 
+// --------------------------------------------------------- diagnostics ----
+// Failures here are silent by nature, so everything the alert path depends on
+// is recorded and shown rather than swallowed.
+const diag = { errors: [], lastAlert: null, swState: 'not registered', sub: 'none', reg: null };
+
+function noteError(where, err) {
+  const line = where + ': ' + (err && err.message ? err.message : String(err));
+  diag.errors.unshift(new Date().toISOString().slice(11, 19) + ' ' + line);
+  diag.errors = diag.errors.slice(0, 6);
+}
+
+function isStandalone() {
+  return !!(window.navigator.standalone ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches));
+}
+
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// iOS only exposes Web Push to a site installed on the Home Screen.
+function pushBlockedByInstall() {
+  return isIOS() && !isStandalone();
+}
+
+async function refreshDiagnostics() {
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      diag.reg = reg || null;
+      diag.swState = reg
+        ? (navigator.serviceWorker.controller ? 'active and controlling this page' : 'registered, not yet controlling')
+        : 'not registered';
+      if (reg && reg.pushManager) {
+        try {
+          const sub = await reg.pushManager.getSubscription();
+          diag.sub = sub ? 'subscribed' : 'none (no push backend configured)';
+        } catch (e) { diag.sub = 'unavailable'; noteError('pushManager', e); }
+      } else {
+        diag.sub = 'push not supported here';
+      }
+    } catch (e) { noteError('serviceWorker', e); }
+  } else {
+    diag.swState = 'service workers not supported';
+  }
+  renderDiagnostics();
+}
+
+function renderDiagnostics() {
+  const box = document.getElementById('diagLog');
+  const sum = document.getElementById('diagSummary');
+  if (!box) return;
+  const target = countdownTarget(Date.now());
+  const perm = notifState();
+  const lines = [
+    'Notification permission : ' + perm,
+    'Installed to home screen: ' + (isStandalone() ? 'yes' : 'no'),
+    'Platform                : ' + (isIOS() ? 'iOS' : 'other'),
+    'Service worker          : ' + diag.swState,
+    'Push subscription       : ' + diag.sub,
+    'Sound                   : ' + (settings.muted ? 'off (notifications only)' : 'on'),
+    'Audio unlocked          : ' + (audioReady ? 'yes' : 'no — tap the page once'),
+    'Next event              : ' + (target ? target.label + ' at ' + fmtTime(
+      Math.round((target.at - epochOf(todayInZone().y, todayInZone().m, todayInZone().d, 0, 0, zoneName())) / 60000)) : 'none'),
+    'Last alert raised       : ' + (diag.lastAlert || 'none this session'),
+    'Timetable               : ' + (timetable && timetable.days ? Object.keys(timetable.days).length : 0) + ' days',
+    'Version                 : ' + APP_VERSION
+  ];
+  if (diag.errors.length) lines.push('', 'Recent errors:', ...diag.errors.map(e => '  ' + e));
+  box.textContent = lines.join('\n');
+  if (sum) {
+    sum.textContent = perm !== 'granted' ? 'Notifications not allowed yet'
+      : pushBlockedByInstall() ? 'Allowed — but add to Home Screen for lock-screen alerts'
+      : 'Allowed — alerts fire while the app is open';
+  }
+}
+
+async function sendTestNotification() {
+  if (notifState() !== 'granted') {
+    toast('Allow notifications first');
+    return;
+  }
+  showInApp('Test notification', 'If you can see this banner, in-app alerts work.');
+  notify('Test notification', 'Raised at ' + new Date().toLocaleTimeString());
+  diag.lastAlert = 'test at ' + new Date().toLocaleTimeString();
+  await refreshDiagnostics();
+  toast('Test sent');
+}
+
+function explainBackground() {
+  const msg = pushBlockedByInstall()
+    ? 'On iPhone, alerts can only reach the lock screen once the app is added to the Home Screen: Share → Add to Home Screen, then open it from there and allow notifications.'
+    : isStandalone()
+      ? 'Installed. Alerts still need a push server to arrive while the app is closed — that part is not set up yet, so alerts fire while the app is open.'
+      : 'Alerts fire while the app is open. Arriving with the app closed needs a push server, which is not set up yet.';
+  showInApp('Background alerts', msg);
+}
+
+function showInApp(title, text) {
+  const el = document.getElementById('inAppAlert');
+  if (!el) return;
+  document.getElementById('inAppTitle').textContent = title;
+  document.getElementById('inAppText').textContent = text || '';
+  el.hidden = false;
+  clearTimeout(showInApp._t);
+  showInApp._t = setTimeout(() => { el.hidden = true; }, 15000);
+}
+
 function notifState() {
   return ('Notification' in window) ? Notification.permission : 'unsupported';
 }
@@ -486,7 +596,15 @@ async function armNotifications() {
   try { await Notification.requestPermission(); } catch (e) {}
   updateAlerts();
   renderSettings();
-  toast(notifState() === 'granted' ? 'Notifications on' : 'Notifications not allowed');
+  refreshDiagnostics();
+  if (notifState() === 'granted') {
+    toast('Notifications on');
+    if (pushBlockedByInstall()) explainBackground();
+  } else {
+    // Never ask again once refused; point at the browser settings instead.
+    showInApp('Notifications not allowed',
+      'Allow notifications for this site in your browser settings, then reopen the app.');
+  }
 }
 
 function toggleSound() {
@@ -553,14 +671,26 @@ function stopAudio() { if (azanEl) { try { azanEl.pause(); azanEl.currentTime = 
 
 /* ---------------------------------------------------------------- alerts  */
 
+// The worker raises the notification where it can: iOS has no page-level
+// Notification constructor, and a worker notification also survives the page
+// being hidden. Falls back to the page API, and records what failed.
 function notify(title, body) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  const opts = { body: body, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: 'azan', renotify: true };
-  if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-    navigator.serviceWorker.ready.then(r => r.showNotification(title, opts)).catch(() => {
-      try { new Notification(title, opts); } catch (e) {}
-    });
-  } else { try { new Notification(title, opts); } catch (e) {} }
+  const opts = {
+    body: body, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+    tag: 'azan', renotify: true, data: { url: './index.html' }
+  };
+  diag.lastAlert = title + ' at ' + new Date().toLocaleTimeString();
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.ready
+      .then(reg => reg.showNotification(title, opts))
+      .catch(err => {
+        noteError('showNotification', err);
+        try { new Notification(title, opts); } catch (e) { noteError('Notification', e); }
+      });
+  } else {
+    try { new Notification(title, opts); } catch (e) { noteError('Notification', e); }
+  }
 }
 
 function firedStore() {
@@ -578,27 +708,35 @@ function markFired(id) {
 
 function alreadyFired(id) { return firedStore().keys.includes(id); }
 
+let alertChannel = null;
+try {
+  alertChannel = new BroadcastChannel('azan-alerts');
+  alertChannel.onmessage = ev => { if (ev.data && ev.data.fired) markFired(ev.data.fired); };
+} catch (e) { alertChannel = null; }
+
 function fire(event, kind) {
   const id = kind + ':' + event.date + ':' + event.key;
   if (alreadyFired(id)) return;
   markFired(id);
+  // Other open copies mark it too, so only one of them alerts.
+  if (alertChannel) { try { alertChannel.postMessage({ fired: id }); } catch (e) {} }
   const mode = settings.muted ? 'off' : (settings.sound[event.key] || 'off');
 
   if (kind === 'pre') {
     notify(event.name + ' in ' + settings.pre + ' min', event.name + ' at ' + fmtTime(event.minutes));
     if (mode !== 'off') chime(1);
-    toast(event.name + ' in ' + settings.pre + ' minutes');
+    showInApp(event.name + ' in ' + settings.pre + ' min', event.name + ' at ' + fmtTime(event.minutes));
     return;
   }
   if (kind === 'jam') {
     const mins = settings.jam;
     notify(event.name + ' iqamah in ' + mins + ' min', 'Iqamah at ' + fmtTime(event.jamaah));
     if (mode !== 'off') chime(2);
-    toast(event.name + ' iqamah in ' + mins + ' minutes');
+    showInApp(event.name + ' iqamah in ' + mins + ' min', 'Iqamah at ' + fmtTime(event.jamaah));
     return;
   }
   notify(event.name, 'It is now ' + fmtTime(event.minutes) + ' — time for ' + event.name + '.');
-  toast(event.name + ' — ' + fmtTime(event.minutes));
+  showInApp(event.name, 'It is now ' + fmtTime(event.minutes) + '.');
   if (mode === 'azan') playAzan();
   else if (mode === 'beep') chime(3);
 }
@@ -716,20 +854,22 @@ function countdownTarget(now) {
   // counts down to that prayer's iqamah and keeps it highlighted.
   for (const e of today) {
     if (!e.sun && e.jamaahAt !== null && e.at <= now && now < e.jamaahAt) {
-      return { label: e.name + ' Iqamah', at: e.jamaahAt, key: e.key };
+      return { label: e.name + ' Iqamah', at: e.jamaahAt, key: e.key, from: e.at };
     }
   }
 
-  // Otherwise it is the next prayer still to come. Sunrise is in the table but
-  // is not a prayer, so it is never the target.
-  let upcoming = today.filter(e => !e.sun && e.at > now);
+  // Otherwise it is the next event still to come, Sunrise included: it is the
+  // end of Fajr's window, and the board counts down to it like anything else.
+  let upcoming = today.filter(e => e.at > now);
+  let previous = today.filter(e => e.at <= now);
   if (!upcoming.length) {
     const nx = addDays(t, 1);
-    upcoming = eventsFor(nx.y, nx.m, nx.d).filter(e => !e.sun && e.at > now);
+    upcoming = eventsFor(nx.y, nx.m, nx.d).filter(e => e.at > now);
   }
   if (!upcoming.length) return null;
   const nxt = upcoming[0];
-  return { label: nxt.name, at: nxt.at, key: nxt.key };
+  const from = previous.length ? previous[previous.length - 1].at : nxt.at - 3600000;
+  return { label: nxt.name, at: nxt.at, key: nxt.key, from: from };
 }
 
 // The board's day ends when the Isha congregation has been held, not when its
@@ -745,7 +885,13 @@ function renderCountdown(now) {
   const meta = (timetable && timetable.meta) || {};
   const target = countdownTarget(now);
   document.getElementById('nextName').textContent = target ? target.label.toUpperCase() : '—';
-  document.getElementById('countdown').textContent = target ? fmtDur(target.at - now) : '--:--:--';
+  // Never show a negative countdown: the target is always ahead of now.
+  document.getElementById('countdown').textContent =
+    target ? fmtDur(Math.max(0, target.at - now)) : '--:--:--';
+
+  const span = target ? target.at - target.from : 0;
+  const done = target && span > 0 ? Math.max(0, Math.min(1, (now - target.from) / span)) : 0;
+  document.getElementById('progressBar').style.width = (done * 100).toFixed(2) + '%';
 
   document.getElementById('cdLabel').textContent =
     (ishaDone(now) ? 'Tomorrow' : 'Today') + ' @ ' + (meta.city || zoneName().split('/').pop()).replace(/\s+\d+$/, '') + ' ·';
@@ -921,9 +1067,10 @@ function wire() {
   }
   function showView(name) {
     closeMenu();
+    document.body.classList.toggle('inner', name !== 'today');
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + name));
     if (name === 'month') renderMonth();
-    if (name === 'settings') renderSettings();
+    if (name === 'settings') { renderSettings(); refreshDiagnostics(); }
     window.scrollTo(0, 0);
   }
   document.getElementById('menuBtn').onclick = () => {
@@ -936,6 +1083,10 @@ function wire() {
   document.querySelectorAll('.topbar button.back').forEach(b => { b.onclick = () => showView('today'); });
 
   document.getElementById('unlockBtn').onclick = armNotifications;
+  document.getElementById('inAppClose').onclick = () => { document.getElementById('inAppAlert').hidden = true; };
+  document.getElementById('diagRefresh').onclick = refreshDiagnostics;
+  document.getElementById('testNotifBtn').onclick = sendTestNotification;
+  document.getElementById('installHelpBtn').onclick = explainBackground;
   document.getElementById('soundToggle').onclick = toggleSound;
   document.getElementById('testBtn').onclick = () => { unlockAudio(); setTimeout(playAzan, 120); };
   document.getElementById('stopBtn').onclick = stopAudio;
@@ -1066,6 +1217,7 @@ function wire() {
   setInterval(tick, 1000);
   tick();
   applyWakeLock();
+  refreshDiagnostics();
   if (!window.__AZAN_STANDALONE__ && 'serviceWorker' in navigator) {
     // updateViaCache:'none' stops the browser serving a cached worker, and the
     // reload below picks up a new one without anyone clearing site data.
