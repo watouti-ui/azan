@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '1.9.1';
+const APP_VERSION = '2.0.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -897,6 +897,49 @@ function renderCountdown(now) {
     (ishaDone(now) ? 'Tomorrow' : 'Today') + ' @ ' + (meta.city || zoneName().split('/').pop()).replace(/\s+\d+$/, '') + ' ·';
 }
 
+// The mat outline is generated at the mat's real pixel size: the dome keeps a
+// constant proportion of the width while the walls stretch to whatever height
+// the timetable needs, so nothing is distorted by a non-uniform viewBox.
+const DOME = [  // silhouette in a 100 x 41 box, scaled to the dome's pixel size
+  ['M', 2, 41], ['C', 2, 33, 4, 27, 11, 27], ['C', 17, 27, 19, 23, 21, 18],
+  ['C', 25, 9, 38, 4, 44, 4], ['L', 50, 0], ['L', 56, 4],
+  ['C', 62, 4, 75, 9, 79, 18], ['C', 81, 23, 83, 27, 89, 27], ['C', 96, 27, 98, 33, 98, 41]
+];
+
+function matOutline(w, h, inset, domeH, radius) {
+  const sx = (w - inset * 2) / 100, sy = domeH / 41;
+  const X = x => (inset + x * sx).toFixed(1);
+  const Y = y => (inset + y * sy).toFixed(1);
+  let d = '';
+  for (const seg of DOME) {
+    const [cmd, ...n] = seg;
+    d += ' ' + cmd;
+    for (let i = 0; i < n.length; i += 2) d += ' ' + X(n[i]) + ' ' + Y(n[i + 1]);
+  }
+  const right = +X(98), left = +X(2), bottom = h - inset, r = Math.min(radius, (right - left) / 2);
+  d += ' L ' + right + ' ' + (bottom - r);
+  d += ' A ' + r + ' ' + r + ' 0 0 1 ' + (right - r) + ' ' + bottom;
+  d += ' L ' + (left + r) + ' ' + bottom;
+  d += ' A ' + r + ' ' + r + ' 0 0 1 ' + left + ' ' + (bottom - r) + ' Z';
+  return d.trim();
+}
+
+function drawMat() {
+  const mat = document.querySelector('.mat');
+  const svg = document.getElementById('matline');
+  if (!mat || !svg) return;
+  const w = mat.clientWidth, h = mat.clientHeight;
+  if (!w || !h) return;
+  const domeH = Math.max(64, Math.min(w * 0.3, h * 0.42));
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  const outer = matOutline(w, h, 1, domeH, 16);
+  const inner = matOutline(w, h, 7, domeH - 6, 12);
+  document.getElementById('matShape').setAttribute('d', outer);
+  document.getElementById('matFill').setAttribute('d', outer);
+  document.getElementById('matStroke').setAttribute('d', outer);
+  document.getElementById('matInner').setAttribute('d', inner);
+}
+
 function renderClock() {
   const p = zoneParts(new Date(), zoneName());
   document.getElementById('clock').textContent =
@@ -1213,7 +1256,14 @@ function wire() {
   await loadAzanAudio();
   renderAll();
   renderClock();
+  drawMat();
   updateAlerts();
+  if (window.ResizeObserver) {
+    const mat = document.querySelector('.mat');
+    if (mat) new ResizeObserver(drawMat).observe(mat);
+  }
+  window.addEventListener('resize', drawMat);
+  window.addEventListener('orientationchange', () => setTimeout(drawMat, 120));
   setInterval(tick, 1000);
   tick();
   applyWakeLock();

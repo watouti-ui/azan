@@ -51,6 +51,14 @@ button{cursor:pointer;border:0;background:none}
    ratio drive it and the other offset is dropped, which left the arch either
    spilling past the crown or short of its right edge. */
 .crown .archline{position:absolute;left:2px;top:0;width:calc(100% - 4px);height:100%;z-index:0}
+/* One mihrab-shaped mat holds the clock and the whole timetable: the dome sits
+   at the top and its walls run the full height, closing under the last row.
+   The outline is drawn in real pixels by drawMat(), so the dome keeps its
+   proportions however tall the mat is. */
+.mat{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin:0 6px}
+.mat > .matline{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.mat > *:not(.matline){position:relative;z-index:1}
+
 /* Transient strips sit after the rows, so the flexible rows absorb their
    height and the table header never moves down the screen. */
 .overlays{flex:0 0 auto}
@@ -73,17 +81,18 @@ button{cursor:pointer;border:0;background:none}
 }
 
 .thead{flex:0 0 auto;display:grid;grid-template-columns:1fr var(--col) var(--col);align-items:center;
-  margin:0 12px;padding:clamp(3px,.7vh,8px) 6px;
-  border-top:1.2px solid var(--rule);border-bottom:1.2px solid var(--rule);
+  margin:0 17px;padding:clamp(3px,.7vh,8px) 6px;
+  border-top:1.1px solid rgba(42,46,61,.75);border-bottom:1.1px solid rgba(42,46,61,.75);
   font-size:clamp(10px,min(3.2vw,1.6vh),13px);color:var(--ink-soft);font-weight:400;letter-spacing:.06em}
 .thead .c2,.thead .c3{text-align:center}
 
 /* Six rows share whatever height is left, so the dashboard always fits. */
 ul.times{list-style:none;margin:0;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
-  gap:clamp(2px,.45vh,5px);padding:clamp(3px,.6vh,7px) 10px}
+  gap:clamp(2px,.45vh,5px);padding:clamp(3px,.6vh,7px) 15px clamp(8px,1.5vh,18px)}
 ul.times li{position:relative;flex:1 1 0;min-height:0;display:grid;
   grid-template-columns:1fr var(--col) var(--col);align-items:center;
-  padding:0 8px;border-radius:7px;overflow:hidden;background:rgba(253,252,249,.93)}
+  padding:0 8px;border-radius:7px;overflow:hidden;background:#fdfcf9;
+  box-shadow:0 1px 0 rgba(120,110,88,.07)}
 ul.times li.passed .pname,ul.times li.passed .t{opacity:.88}
 ul.times li.current{background:linear-gradient(100deg,#c4ebfa,#dcf4fd 60%,#cfeffc)}
 ul.times li.current:before{content:"";position:absolute;left:0;top:0;bottom:0;width:8px;
@@ -227,33 +236,20 @@ body.inner .inapp{top:calc(62px + env(safe-area-inset-top))}
 <!-- ================= TODAY : the board ================= -->
 <section class="view on" id="v-today">
   <div class="board">
-    <div class="crown">
-      <svg class="archline" viewBox="0 0 100 62" preserveAspectRatio="none" aria-hidden="true">
+    <div class="mat">
+      <svg class="matline" id="matline" aria-hidden="true" preserveAspectRatio="none">
         <defs>
-          <pattern id="archfill" width="7" height="7" patternUnits="userSpaceOnUse">
-            <path d="M3.5 0 L7 3.5 L3.5 7 L0 3.5 Z" fill="#eceadf" opacity=".55"/>
+          <pattern id="matfill" width="7" height="7" patternUnits="userSpaceOnUse">
+            <path d="M3.5 0 L7 3.5 L3.5 7 L0 3.5 Z" fill="#e8e4d8" opacity=".5"/>
           </pattern>
         </defs>
-        <!-- Fill and outline are separate paths: the outline runs up one side,
-             over the peak and down the other and stops at the bottom corners,
-             so nothing is stroked across underneath the clock. -->
-        <path id="archShape"
-              d="M2 62 L2 41 C2 33 4 27 11 27 C17 27 19 23 21 18
-                 C25 9 38 4 44 4 L50 0 L56 4 C62 4 75 9 79 18
-                 C81 23 83 27 89 27 C96 27 98 33 98 41 L98 62 Z"
-              fill="#fbfaf7"/>
-        <use href="#archShape" fill="url(#archfill)"/>
-        <path d="M2 62 L2 41 C2 33 4 27 11 27 C17 27 19 23 21 18
-                 C25 9 38 4 44 4 L50 0 L56 4 C62 4 75 9 79 18
-                 C81 23 83 27 89 27 C96 27 98 33 98 41 L98 62"
-              fill="none" stroke="#c0b9a8" stroke-width="1" vector-effect="non-scaling-stroke"/>
-        <g transform="translate(50 33) scale(0.93 0.88) translate(-50 -33)">
-          <path d="M2 62 L2 41 C2 33 4 27 11 27 C17 27 19 23 21 18
-                   C25 9 38 4 44 4 L50 0 L56 4 C62 4 75 9 79 18
-                   C81 23 83 27 89 27 C96 27 98 33 98 41 L98 62"
-                fill="none" stroke="#cfc8b8" stroke-width="1" vector-effect="non-scaling-stroke"/>
-        </g>
+        <path id="matShape" d="" fill="#f4f1e8"/>
+        <path id="matFill" d="" fill="url(#matfill)"/>
+        <path id="matStroke" d="" fill="none" stroke="#bdb5a3" stroke-width="1.2"/>
+        <path id="matInner" d="" fill="none" stroke="#d2cbba" stroke-width="1"/>
       </svg>
+    <div class="crown">
+
       <div class="dates">
         <div class="dstack" id="todayDate">—</div>
         <div class="dstack right" id="todayHijri">—</div>
@@ -280,6 +276,7 @@ body.inner .inapp{top:calc(62px + env(safe-area-inset-top))}
 
     <div class="thead"><span class="c1">PRAYER</span><span class="c2">ADHAN</span><span class="c3">IQAMAH</span></div>
     <ul class="times" id="todayList"></ul>
+    </div>
 
     <div class="overlays">
     <div class="banner sample" id="sampleBanner">
