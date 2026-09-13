@@ -18,7 +18,7 @@
   --sand:#e7e0d2; --sand-2:#efe9dd; --arch:#fbfaf7; --arch-line:#c7c0b1;
   --row-a:#ffffff; --row-b:#eeebe4; --row-line:#e2ddd2;
   --ink:#1f2333; --ink-2:#3d4152; --ink-soft:#7b7f90;
-  --gold:#f8e8c2; --gold-2:#c39a55; --gold-line:#9d7f3f;
+  --gold:#f6e2b4; --gold-2:#b98d42; --gold-line:#9d7f3f;
   --blue:#7fc8ea; --blue-2:#c3e6f7; --blue-ink:#1272a6; --blue-cap:#4aa9d6;
   --rule:#2a2e3d;
 }
@@ -46,26 +46,30 @@ button{cursor:pointer;border:0;background:none}
     repeating-linear-gradient(-45deg, rgba(190,180,158,.16) 0 2px, transparent 2px 11px),
     linear-gradient(180deg,#e9e2d4,#efe9dd 55%,#e6dfd0);
 }
-.crown{position:relative;flex:0 0 auto;padding:clamp(4px,1vh,12px) 14px clamp(5px,1.1vh,13px)}
+.crown{position:relative;flex:0 0 auto;padding:clamp(4px,1vh,12px) 14px clamp(9px,3.4vh,36px)}
 /* Both dimensions are set explicitly: leaving either to auto lets the viewBox
    ratio drive it and the other offset is dropped, which left the arch either
    spilling past the crown or short of its right edge. */
 .crown .archline{position:absolute;left:2px;top:0;width:calc(100% - 4px);height:100%;z-index:0}
+/* Transient strips sit after the rows, so the flexible rows absorb their
+   height and the table header never moves down the screen. */
+.overlays{flex:0 0 auto}
+.overlays:empty{display:none}
 .dates{position:relative;display:flex;justify-content:space-between;align-items:flex-start;z-index:2}
 .dstack{font-size:clamp(10px,min(3vw,1.6vh),14px);line-height:1.18;color:var(--ink-2);font-weight:400;min-width:46px}
 .dstack b{display:block;font-size:clamp(20px,min(6.4vw,3.4vh),34px);line-height:1.02;font-weight:600;
   color:var(--ink);margin:1px 0}
 .dstack.right{text-align:right}
-.mark{position:absolute;left:50%;transform:translateX(-50%);top:clamp(12px,2.8vh,30px);
-  width:clamp(36px,min(10.5vw,5.4vh),60px);z-index:2}
+.mark{position:absolute;left:50%;transform:translateX(-50%);top:clamp(16px,4.2vh,42px);
+  width:clamp(46px,min(13.5vw,8vh),82px);z-index:2}
 .mark svg{display:block;width:100%;height:auto}
 .clock{
   position:relative;z-index:2;text-align:center;line-height:1.02;
-  margin:clamp(26px,9.6vh,88px) 0 clamp(1px,.4vh,6px);
-  font-size:clamp(40px,min(16.5vw,9vh),88px);font-weight:700;letter-spacing:.004em;
+  margin:clamp(16px,6.2vh,60px) 0 clamp(1px,.4vh,6px);
+  font-size:clamp(42px,min(19vw,11.4vh),98px);font-weight:700;letter-spacing:.004em;
   font-variant-numeric:tabular-nums;color:var(--gold);
-  -webkit-text-stroke:1.1px var(--gold-2);
-  text-shadow:0 1px 0 rgba(157,127,63,.28);
+  -webkit-text-stroke:1.7px var(--gold-2);
+  text-shadow:0 1px 0 rgba(140,110,52,.42);
 }
 
 .thead{flex:0 0 auto;display:grid;grid-template-columns:1fr var(--col) var(--col);align-items:center;
@@ -79,13 +83,15 @@ ul.times{list-style:none;margin:0;flex:1 1 auto;min-height:0;display:flex;flex-d
   gap:clamp(2px,.45vh,5px);padding:clamp(3px,.6vh,7px) 10px}
 ul.times li{position:relative;flex:1 1 0;min-height:0;display:grid;
   grid-template-columns:1fr var(--col) var(--col);align-items:center;
-  padding:0 8px;border-radius:7px;overflow:hidden;background:rgba(255,255,255,.62)}
-ul.times li.passed .pname,ul.times li.passed .t{opacity:.55}
+  padding:0 8px;border-radius:7px;overflow:hidden;background:rgba(253,252,249,.93)}
+ul.times li.passed .pname,ul.times li.passed .t{opacity:.88}
 ul.times li.current{background:linear-gradient(100deg,#c4ebfa,#dcf4fd 60%,#cfeffc)}
 ul.times li.current:before{content:"";position:absolute;left:0;top:0;bottom:0;width:8px;
   border-radius:7px 0 0 7px;background:#35b6e8}
 ul.times li.current .pname,ul.times li.current .t{
-  color:#1596cf;opacity:1;font-weight:400;text-shadow:0 1px 0 rgba(255,255,255,.85)}
+  color:#17a9e8;opacity:1;font-weight:500;
+  -webkit-text-stroke:.4px #0d82b8;
+  text-shadow:0 1px 0 rgba(255,255,255,.95)}
 .pname{font-weight:300;letter-spacing:.04em;text-transform:uppercase;
   font-size:clamp(13px,min(4.2vw,2.2vh),21px);min-width:0;padding-left:clamp(6px,2.2vw,14px)}
 .t{text-align:center;font-variant-numeric:tabular-nums;
@@ -232,19 +238,19 @@ body.inner .inapp{top:calc(62px + env(safe-area-inset-top))}
              over the peak and down the other and stops at the bottom corners,
              so nothing is stroked across underneath the clock. -->
         <path id="archShape"
-              d="M2 62 L2 45 C2 37 6 34 13 34 C21 34 24 31 26 25
-                 C32 14 42 6 46 4 L50 0 L54 4 C58 6 68 14 74 25
-                 C76 31 79 34 87 34 C94 34 98 37 98 45 L98 62 Z"
+              d="M2 62 L2 41 C2 33 4 27 11 27 C17 27 19 23 21 18
+                 C25 9 38 4 44 4 L50 0 L56 4 C62 4 75 9 79 18
+                 C81 23 83 27 89 27 C96 27 98 33 98 41 L98 62 Z"
               fill="#fbfaf7"/>
         <use href="#archShape" fill="url(#archfill)"/>
-        <path d="M2 62 L2 45 C2 37 6 34 13 34 C21 34 24 31 26 25
-                 C32 14 42 6 46 4 L50 0 L54 4 C58 6 68 14 74 25
-                 C76 31 79 34 87 34 C94 34 98 37 98 45 L98 62"
+        <path d="M2 62 L2 41 C2 33 4 27 11 27 C17 27 19 23 21 18
+                 C25 9 38 4 44 4 L50 0 L56 4 C62 4 75 9 79 18
+                 C81 23 83 27 89 27 C96 27 98 33 98 41 L98 62"
               fill="none" stroke="#c0b9a8" stroke-width="1" vector-effect="non-scaling-stroke"/>
         <g transform="translate(50 33) scale(0.93 0.88) translate(-50 -33)">
-          <path d="M2 62 L2 45 C2 37 6 34 13 34 C21 34 24 31 26 25
-                   C32 14 42 6 46 4 L50 0 L54 4 C58 6 68 14 74 25
-                   C76 31 79 34 87 34 C94 34 98 37 98 45 L98 62"
+          <path d="M2 62 L2 41 C2 33 4 27 11 27 C17 27 19 23 21 18
+                   C25 9 38 4 44 4 L50 0 L56 4 C62 4 75 9 79 18
+                   C81 23 83 27 89 27 C96 27 98 33 98 41 L98 62"
                 fill="none" stroke="#cfc8b8" stroke-width="1" vector-effect="non-scaling-stroke"/>
         </g>
       </svg>
@@ -272,6 +278,10 @@ body.inner .inapp{top:calc(62px + env(safe-area-inset-top))}
       <div class="clock" id="clock">-:--:--</div>
     </div>
 
+    <div class="thead"><span class="c1">PRAYER</span><span class="c2">ADHAN</span><span class="c3">IQAMAH</span></div>
+    <ul class="times" id="todayList"></ul>
+
+    <div class="overlays">
     <div class="banner sample" id="sampleBanner">
       <b>Sample timetable — do not pray by these times.</b>
       Import the mosque's timetable in Settings → Timetable.
@@ -284,9 +294,7 @@ body.inner .inapp{top:calc(62px + env(safe-area-inset-top))}
       <span id="alertText">Notifications are off</span>
       <button id="unlockBtn">Turn on</button>
     </div>
-
-    <div class="thead"><span class="c1">PRAYER</span><span class="c2">ADHAN</span><span class="c3">IQAMAH</span></div>
-    <ul class="times" id="todayList"></ul>
+    </div>
 
     <div class="upnext">
       <span class="n" id="nextName">—</span>

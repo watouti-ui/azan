@@ -1,5 +1,5 @@
 /* Offline cache for the Azan app. Bump CACHE when files change. */
-const CACHE = 'azan-v1.9.0';
+const CACHE = 'azan-v1.9.1';
 const ASSETS = [
   './',
   './index.html',
