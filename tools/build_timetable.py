@@ -10,6 +10,7 @@ Row layout (pipe-separated groups):
 Header lines before the rows:
     month:   YYYY-MM              (required)
     jummah:  13:40, 14:40         (optional, khutba times)
+    jummah_summer / jummah_winter (optional, when they differ by season)
     note:    free text            (optional, repeatable)
     name:    mosque name           (optional)
     city:    town or area           (optional)
@@ -65,8 +66,8 @@ def parse_file(path: Path):
             key, value = key.strip().lower(), value.strip()
             if key == "note":
                 meta["notes"].append(value)
-            elif key == "jummah":
-                meta["jummah"] = [v.strip() for v in value.split(",") if v.strip()]
+            elif key in ("jummah", "jummah_summer", "jummah_winter"):
+                meta[key] = [v.strip() for v in value.split(",") if v.strip()]
             elif key in ("month", "name", "city", "tz", "hijri_year"):
                 meta[key] = value
             else:
@@ -114,8 +115,11 @@ def main() -> None:
             meta_out["hijriYear"] = int(meta["hijri_year"])
         if meta.get("tz"):
             meta_out["timezone"] = meta["tz"]
-        if meta.get("jummah"):
-            meta_out["jummah"] = meta["jummah"]
+        for key, out_key in (("jummah", "jummah"),
+                             ("jummah_summer", "jummahSummer"),
+                             ("jummah_winter", "jummahWinter")):
+            if meta.get(key):
+                meta_out[out_key] = meta[key]
         if meta["notes"]:
             meta_out.setdefault("notes", [])
             for note in meta["notes"]:

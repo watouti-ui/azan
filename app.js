@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -60,6 +60,22 @@ function hijriParts(t) {
     const entry = dayEntry(t.m, t.d);
     return entry ? hijriFromText(entry.hijri) : null;
   }
+}
+
+// The sheet prints one pair of khutba times for summer and another for winter,
+// so pick by whether the zone is on summer time that day.
+function inSummerTime(t) {
+  const tz = zoneName();
+  const january = zoneOffsetMs(new Date(Date.UTC(t.y, 0, 15, 12)), tz);
+  const onTheDay = zoneOffsetMs(new Date(Date.UTC(t.y, t.m - 1, t.d, 12)), tz);
+  return onTheDay !== january;
+}
+
+function jummahTimes(meta, t) {
+  if (meta.jummahSummer || meta.jummahWinter) {
+    return (inSummerTime(t) ? meta.jummahSummer : meta.jummahWinter) || meta.jummah;
+  }
+  return meta.jummah;
 }
 
 function addDays(t, n) {
@@ -826,11 +842,12 @@ function renderToday() {
 
   const jummahCard = document.getElementById('jummahCard');
   const weekday = new Date(Date.UTC(shown.y, shown.m - 1, shown.d)).getUTCDay();
-  if (weekday === 5 && meta.jummah && meta.jummah.length) {
+  const jummah = jummahTimes(meta, shown);
+  if (weekday === 5 && jummah && jummah.length) {
     const toMinutes = v => (+v.split(':')[0]) * 60 + (+v.split(':')[1]);
-    document.getElementById('jum1').textContent = fmtTime(toMinutes(meta.jummah[0]));
+    document.getElementById('jum1').textContent = fmtTime(toMinutes(jummah[0]));
     document.getElementById('jum2').textContent =
-      meta.jummah[1] ? fmtTime(toMinutes(meta.jummah[1])) : '—';
+      jummah[1] ? fmtTime(toMinutes(jummah[1])) : '—';
     jummahCard.hidden = false;
   } else {
     jummahCard.hidden = true;

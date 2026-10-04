@@ -8,7 +8,8 @@ name: Shaheed Bilal Masjid
 city: Dublin 15
 tz: Europe/Dublin
 hijri_year: 1448
-jummah: 13:40, 14:40
+jummah_summer: 13:40, 14:40
+jummah_winter: 12:30, 13:20
 note: Maghrib salah 5 min after azan
 note: Isha salah 5 min after azan
 
