@@ -1,15 +1,39 @@
 # Shaheed Bilal Mosque — Prayer Times App
 ## End-to-end build requirements (for a Lovable rebuild)
 
-**Version of this spec:** 1.0 · **Describes app version:** 2.1.0
+**Version of this spec:** 2.0 · **Describes app version:** 2.1.0
 **Reference implementation:** this repository (`azan/`) — vanilla HTML/CSS/JS PWA
 **Live reference:** https://watouti-ui.github.io/azan/
+**Delivery target:** installable **native iOS and Android apps** (see Part B)
 
 This document is written to be pasted into Lovable (in sections) and to be
 complete enough that the rebuild is behaviourally identical to the reference.
 Every number, colour and rule below is taken from the working build, not from
 design intent. Where a value looks arbitrary, it is load-bearing — it was
 tuned against photographs of the mosque's physical display board.
+
+## How this document is organised
+
+| | | |
+|---|---|---|
+| **Part A** | §1–§18 | **The app.** Data, time engine, screens, exact layout, settings, parser, acceptance criteria. Built in Lovable. Reused unchanged whether the app ships as a web app or a native binary. |
+| **Part B** | §19–§25 | **Native delivery.** How Part A becomes an App Store / Play Store binary, and the three things that genuinely change: alerts, audio, and how a new month's timetable reaches users. Done outside Lovable. |
+
+**Read §19 first.** Lovable does not build native apps — confirmed against its
+own documentation — and §19.4 names a precondition that must be checked before
+any feature code is written. Getting that wrong is discovered late and costs a
+rebuild.
+
+**If you only want the web app**, Part A alone is complete and is what the
+reference implementation already is. Stop at §18.
+
+---
+
+# PART A — THE APP
+
+Everything in §1–§18 is the app itself, and is identical in the web build and
+inside the native shell. Build it in Lovable; verify it against §14 before
+going anywhere near Part B.
 
 ---
 
@@ -62,7 +86,11 @@ Sunrise has only one time and no iqamah.
 # 2. Target stack (Lovable)
 
 Lovable scaffolds React + Vite + TypeScript + Tailwind + shadcn/ui. Build on
-that, with these constraints:
+that, with these constraints.
+
+**Before using this table, read §19.4.** The project must emit a **static,
+client-only build** or the native shell in Part B cannot package it, and
+Lovable's current default framework may not do that without configuration.
 
 | Concern | Requirement |
 |---|---|
@@ -1481,11 +1509,17 @@ messages open pages (§13.12); the handlers below are otherwise unchanged.
 
 ---
 
-# 13. Option: background alerts (lock-screen, app closed)
+# 13. Option: background alerts (lock-screen, app closed) — web only
+
+> **If you are building the native app (Part B), skip this section.** §21
+> delivers background alerts with **no server at all**, by scheduling them with
+> the operating system. A push backend is then needed only for mosque
+> *announcements* — see §21.9. Build §13 only for the web app, or as the
+> optional backstop described in §21.5.
 
 Everything in §1–§12 delivers alerts **only while the app is open**. This
 section specifies the optional addition that makes alerts arrive with the app
-closed and the screen off.
+closed and the screen off, **in a web app**.
 
 It is a **feature-flagged option**, not a rewrite. With the flag unset the app
 must behave byte-for-byte as Phase 1 — same screens, same controls, no dead
@@ -2188,6 +2222,9 @@ Lovable works best in small, verifiable steps. Do not ask it for the whole app
 in one prompt — the board layout and the time engine will both come back
 approximately right and approximately wrong.
 
+**Step 0, before any of this: §19.4.** Confirm the project emits a static,
+client-only build. Everything below is wasted if it cannot be packaged.
+
 | Step | Ask for | Verify before moving on |
 |---|---|---|
 | 1 | Project shell: Vite + React + TS + Tailwind, `color-scheme: light`, no dark mode, no router, a single full-viewport `100svh` page with `overflow:hidden`. | Nothing scrolls; no shadcn chrome on the page. |
@@ -2231,15 +2268,36 @@ backend. Only continue if background alerts are actually wanted.
 - "Background alerts are behind a feature flag. With the flag unset, the
   Settings row must be absent — not disabled, not a placeholder."
 
+## 16.2 Native build order (Part B, outside Lovable)
+
+Steps 13–16 above are the **web** push option and are **not needed** for the
+native app (§21). Going native instead, after step 12:
+
+| Step | Do | Verify before moving on |
+|---|---|---|
+| N1 | Confirm the static client-only build; set Vite `base: './'` (§19.4). | `dist/index.html` opens from `file://` with no 404s and no server entry point. |
+| N2 | `cap init` + add both platforms; `capacitor.config.ts` per §20.2; agree the bundle id with the mosque. | Both projects build and launch to the board, offline, with aeroplane mode on. |
+| N3 | Swap storage to Preferences/Filesystem (§20.5) and disable the service worker natively (§20.6). | Settings survive a force-quit; no `controllerchange` reload loop. |
+| N4 | Platform integration: safe areas, status bar, splash, back button, lifecycle, no overscroll (§23). | §14.3 layout checks pass on a notched device and a short device. |
+| N5 | Local notifications: channels, permissions, the schedule builder and the rolling window (§21.2–§21.7). | A notification arrives on a **real, force-closed** device, both platforms. Nothing else in N5 counts until this does. |
+| N6 | Bundle the notification sounds into both platform folders; add the build check (§22.2). | The adhan excerpt plays from a locked phone — not the system default, which is what a misnamed file silently gives you. |
+| N7 | Foreground dedupe (§21.10) and the native diagnostics lines (§21.8). | App open at an adhan minute: exactly one notification, one banner, audio once. |
+| N8 | Remote timetable with bundled fallback and validation (§25.2). | A hosted revision bump reaches the device, is validated, re-renders, and reschedules alerts. |
+| N9 | Store assets, declarations, review notes (§24); the mosque's written permission (§24.4). | §24.5 checklist complete. |
+
+N5 is where the real work is. N1 is where the project gets derailed if skipped.
+
 ---
 
 # 17. Known limitations (state these to users, do not hide them)
 
-1. **No background alerts in Phase 1.** Alerts fire only while the app is
-   open. A closed web app cannot schedule an alarm or play audio. §13
-   specifies the option that fixes the notification half of this; the **audio**
-   half cannot be fixed at all — a service worker cannot play sound, so a
-   locked phone gets a notification, not the Azan.
+1. **No background alerts in the web app.** Alerts fire only while the app is
+   open. A closed web app cannot schedule an alarm or play audio. Two fixes,
+   and they are not equivalent: §13 adds a push server (web); **§21 schedules
+   them natively with no server at all, and plays a bundled call to prayer as
+   the notification sound** — which is the main reason to ship the native app.
+   Even natively, the *full-length* adhan from a locked phone stays out of
+   reach on iOS (§22.3).
 2. **Coverage is finite.** The app ships September and October 2026. Other
    dates show "No times" until the months are added. The coverage banner says
    so explicitly.
@@ -2272,3 +2330,806 @@ backend. Only continue if background alerts are actually wanted.
 
 When in doubt about a behaviour this document does not cover, the reference
 implementation is authoritative — read it rather than guessing.
+---
+
+# PART B — NATIVE APP (iOS / Android)
+
+Part A (§1–§18) specifies the app itself: its data, its engine, its screens,
+its exact layout. **All of it is reused unchanged in the native app.** Part B
+specifies only the delivery layer — how that same app becomes an installable
+iOS/Android binary, and the three things that genuinely change when it does:
+alerts, audio, and how a new month's timetable reaches users.
+
+---
+
+# 19. Delivery target: native app
+
+## 19.1 What Lovable can and cannot do — verified, not assumed
+
+Checked against Lovable's own documentation (October 2026):
+
+| Claim | Status |
+|---|---|
+| Lovable builds native iOS/Android apps | **No.** Lovable's FAQ states it does not produce native apps and does not generate React Native projects. |
+| Lovable can publish to the App Store / Google Play | **No.** The publish docs state: *"Lovable has no built-in flow that packages and submits your project to the App Store or Google Play."* |
+| Lovable's own recommended native route | **Capacitor, built outside Lovable.** The publish docs say to *"wrap your published URL in a native shell with"* Capacitor, and name this as the right path *"when you need native device APIs"* such as push notifications. |
+| Capacitor plugins work in a Lovable-published app | **No.** Lovable's npm docs state Capacitor native plugins install without error but do not function in the published app, because published apps run in a browser. They work **only** in the native build. |
+| The "Lovable mobile app" | Irrelevant here — it is an app for *building* Lovable projects from a phone. It *"does not turn your project into a native app for end users."* |
+
+**Conclusion.** The route is: **Lovable builds the web/UI layer → Capacitor
+wraps it into native iOS and Android projects → you build and submit those
+outside Lovable.** This is not a workaround; it is the path Lovable's own
+documentation points to.
+
+## 19.2 What this means practically
+
+| | |
+|---|---|
+| Done in Lovable | Everything in Part A: screens, layout, engine, data, parser, settings |
+| Done outside Lovable | Capacitor install and config, native plugin wiring (§21–§23), Xcode and Android Studio builds, store submission (§24) |
+| You will need | A **Mac with Xcode** for iOS (no way around this), **Android Studio** for Android, an **Apple Developer account** (annual fee) and a **Google Play developer account** (one-off fee). Verify current prices — they change. |
+
+Lovable does the part that is most of the work. The native shell is a
+well-trodden, mostly mechanical step; the parts that need real thought are
+§21 (scheduling) and §24 (review risk).
+
+## 19.3 Bundled build, not a URL wrapper — non-negotiable
+
+Capacitor can run in two modes. The choice is not stylistic:
+
+| | Remote URL (`server.url`) | **Bundled static build** |
+|---|---|---|
+| How | the WebView loads your live site | `dist/` is copied into the app |
+| Offline | **broken** — a blank WebView with no signal | works fully |
+| App Store risk | high — reads as "just a website" under Apple guideline 4.2 | low |
+| Code updates | instant | needs a release, or OTA (§25.4) |
+
+**Use the bundled build.** Offline operation is a core requirement of this app
+— a prayer timetable that fails in a basement or on aeroplane mode is not fit
+for purpose — and a thin URL wrapper is the single most common cause of App
+Store rejection for apps of this kind. Lovable's docs phrase the Capacitor
+route as wrapping "your published URL"; do not take that literally here.
+
+## 19.4 Precondition: the project must produce a static client-only build
+
+Capacitor copies a folder of static files. So `npm run build` must emit a
+self-contained client bundle with no server runtime.
+
+**This needs checking before anything else.** Lovable's changelog states that
+apps *"created from May 13, 2026"* use **TanStack Start**; projects created
+before that are **React + Vite**. TanStack Start is server-rendering-capable,
+and an SSR build does not drop into Capacitor.
+
+Do this first, before writing any feature code:
+
+1. Ask Lovable for a **React + Vite single-page app**, explicitly, in the
+   first prompt — or confirm the project it created can emit a static,
+   client-only build.
+2. Run the production build and inspect the output. You need a folder
+   (`dist/`) containing `index.html` plus assets, and **no** server entry
+   point, no `.output/server`, no Node handler.
+3. If the build is server-rendered: configure the framework for SPA / static
+   output and prerender the single route, or export the project to GitHub and
+   point Capacitor at a plain Vite SPA build of the same source.
+4. Confirm the built `index.html` opens correctly from `file://`. Capacitor
+   serves from a local scheme, so **every asset path must be relative** —
+   an absolute `/assets/...` will 404 in the native shell. Set Vite's
+   `base: './'`.
+
+If this step is skipped the first Capacitor build will show a white screen,
+and the cause is not obvious from inside the native tooling.
+
+**One source for the TanStack Start default is Lovable's own changelog; the
+claim that it complicates Capacitor is from a third-party guide. Verify
+against the project in front of you rather than trusting either.**
+
+## 19.5 The alternative, stated fairly
+
+If you are willing to drop Lovable for the UI, **Expo / React Native** builds
+a genuinely native app with no WebView, and has first-class local
+notifications. What carries over and what does not:
+
+| Part A section | Reusable in Expo? |
+|---|---|
+| §3 data model, §4 time engine, §5 Hijri, §7.1–§7.2 countdown, §15 parser | **Yes, verbatim.** They are pure TypeScript with no DOM dependency — this is why Part A insists on that separation. |
+| §6 board layout and CSS | **No.** Rewrite in React Native styles; the `clamp()`/`vh` rhythm has no direct equivalent and the mat SVG needs `react-native-svg`. |
+| §8, §10 screens | Rewrite, same content and behaviour. |
+| §12 PWA | Not applicable. |
+
+That is roughly a week of layout work to redo something that already looks
+right. **Recommendation: Capacitor.** The board is the app's whole identity
+and it is already pixel-correct in CSS; wrapping it keeps that for free and
+still gives real native notifications (§21). Revisit Expo only if the WebView
+proves too slow — on a board that re-renders once a second, it will not.
+
+---
+
+# 20. Native shell setup
+
+## 20.1 Install and initialise
+
+Run outside Lovable, in a checkout of the exported repository:
+
+```bash
+npm i @capacitor/core @capacitor/cli
+npx cap init "Shaheed Bilal Mosque" ie.shaheedbilal.prayer --web-dir dist
+npm i @capacitor/ios @capacitor/android
+npx cap add ios
+npx cap add android
+```
+
+The bundle id (`ie.shaheedbilal.prayer`) is **permanent** — it cannot be
+changed after the first store submission without shipping a new app. Agree it
+with the mosque before the first `cap init`.
+
+## 20.2 `capacitor.config.ts`
+
+```ts
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'ie.shaheedbilal.prayer',
+  appName: 'Shaheed Bilal Mosque',
+  webDir: 'dist',
+  // NO `server.url` — the build is bundled (§19.3).
+  ios:     { contentInset: 'never', backgroundColor: '#e9e5dc' },
+  android: { backgroundColor: '#e9e5dc', allowMixedContent: false },
+  plugins: {
+    SplashScreen: {
+      backgroundColor: '#e9e5dc',
+      showSpinner: false,
+      launchAutoHide: false,        // hidden by the app once the board is drawn
+    },
+    LocalNotifications: {
+      smallIcon: 'ic_stat_masjid',  // Android status-bar icon, white on transparent
+      iconColor: '#1f2333',
+      sound: 'adhan.wav',           // see §22 — and the Android caveat in §21.6
+    },
+  },
+};
+export default config;
+```
+
+`backgroundColor` is set in three places (both platforms and the splash) to the
+board's sand `#e9e5dc`, so there is never a white flash between splash and
+board.
+
+## 20.3 Plugins
+
+| Plugin | Why |
+|---|---|
+| `@capacitor/local-notifications` | **the core of §21** — scheduled alerts with no server |
+| `@capacitor/app` | resume/pause events (§23.5), Android back button (§23.4) |
+| `@capacitor/splash-screen` | controlled hide once the board has drawn |
+| `@capacitor/status-bar` | style the status bar over the sand background |
+| `@capacitor/preferences` | native key-value store; **replaces `localStorage`** (§20.5) |
+| `@capacitor/filesystem` | stores the user's azan audio file (replaces IndexedDB) |
+| `@capacitor-community/keep-awake` | replaces the Web `wakeLock` (§23.3) |
+| `@capacitor/push-notifications` | **only** if §13 is also built, for announcements |
+
+Keep the list this short. Every plugin is a native dependency, a permission
+prompt risk and a store-review question.
+
+## 20.4 Build pipeline
+
+```bash
+npm run build          # must emit a static dist/ (§19.4)
+npx cap sync           # copies dist/ into both native projects, updates plugins
+npx cap open ios       # then Archive in Xcode
+npx cap open android   # then Generate Signed Bundle in Android Studio
+```
+
+`npx cap sync` after **every** web change. Forgetting it means the native app
+silently runs the previous build — the native equivalent of the stale-cache
+problem that §12.3 exists to prevent.
+
+Keep three version numbers in step on every release, and say so in the release
+checklist: `APP_VERSION` in the web code, `CFBundleShortVersionString` +
+`CFBundleVersion` on iOS, `versionName` + `versionCode` on Android.
+
+## 20.5 Storage: swap the web APIs for native ones
+
+A WebView's `localStorage` can be cleared by the OS under storage pressure.
+Settings and an imported timetable must not evaporate.
+
+| Part A (§11) | Native replacement |
+|---|---|
+| `localStorage` `azan.settings`, `azan.timetable`, `azan.fired`, `azan.push` | `@capacitor/preferences` under the same keys |
+| IndexedDB `azan-db` → `files` → `azan` | `@capacitor/filesystem`, `Directory.Data`, `azan-custom.wav` |
+
+Write one storage adapter with the Part A interface (`get`/`set`/`del`) and
+pick the implementation at runtime by `Capacitor.isNativePlatform()`. Part A's
+code then needs no changes, and the same bundle still runs as a web app.
+
+The try/catch discipline in §11 stays: native calls are async and can still fail.
+
+## 20.6 Turn the service worker off in the native shell
+
+Do **not** register the service worker when running natively. A WebView
+serving from a local scheme with a network-first service worker in front of it
+produces double caching, pointless network attempts offline, and a
+`controllerchange` reload loop from §12.3.
+
+```ts
+if (!Capacitor.isNativePlatform() && 'serviceWorker' in navigator) {
+  /* the whole of §12.3 */
+}
+```
+
+The PWA path (§12) stays intact for the web build, which should keep being
+published alongside the native apps — it is how people try the app before
+installing, and how desktop users read the board.
+
+---
+
+# 21. Native alerts — real background alerts, no server
+
+**This is the reason to go native.** Part A could only alert while the app was
+open, and §13 needed a push server to do better. A native app schedules
+notifications with the operating system, so they fire with the app closed,
+the phone locked, and **no backend at all**.
+
+§13 is therefore no longer needed for prayer alerts. It remains useful only
+for mosque *announcements* (§21.9).
+
+## 21.1 What changes and what does not
+
+| | Part A (web) | Native |
+|---|---|---|
+| Alert with app closed | impossible | **yes** |
+| Needs a server | yes (§13) | **no** |
+| Notification sound | system default | **bundled adhan excerpt** (§22) |
+| Full-length adhan from a locked phone | impossible | still constrained — see §22.3 |
+| Alert copy, timing rules, offsets, dedupe ids | §9.4 | **unchanged** |
+
+Everything about *when* to alert and *what it says* is already specified in
+§9.4 and must not be redesigned. Only the mechanism changes.
+
+## 21.2 Scheduling model
+
+The OS holds a set of pending notifications. The app's job is to keep that set
+correct, and to re-derive it whenever anything it depends on changes.
+
+```ts
+import { LocalNotifications } from '@capacitor/local-notifications';
+
+/** Deterministic integer id, so rescheduling is idempotent rather than additive. */
+function notifId(dateISO: string, key: string, kind: 'at'|'pre'|'jam'): number {
+  const dayNo  = Number(dateISO.slice(5,7)) * 100 + Number(dateISO.slice(8,10)); // MMDD
+  const keyNo  = ['fajr','sunrise','dhuhr','asr','maghrib','isha'].indexOf(key); // 0..5
+  const kindNo = { at:0, pre:1, jam:2 }[kind];
+  return dayNo * 100 + keyNo * 10 + kindNo;        // e.g. 16 Oct, dhuhr, at -> 1016_20
+}
+
+async function rescheduleAll() {
+  const pending = await LocalNotifications.getPending();
+  if (pending.notifications.length) {
+    await LocalNotifications.cancel({ notifications: pending.notifications });
+  }
+  const list = buildSchedule(Date.now());           // §21.3
+  if (list.length) await LocalNotifications.schedule({ notifications: list });
+  await recordScheduleDiagnostics(list);            // §21.8
+}
+```
+
+Cancel-then-reschedule, never incremental. Deterministic ids make a missed
+cancel harmless rather than a duplicate alert.
+
+## 21.3 The rolling window — and the iOS cap
+
+Up to **18 notifications per day** are possible (6 prayers × `at`/`pre`/`jam`).
+iOS keeps only a bounded number of pending local notifications per app — widely
+documented as **64**, after which the soonest are kept and the rest discarded
+silently. *Treat 64 as the working budget and verify it on a device before
+relying on a larger number.* Android has no comparable documented limit but
+should not be loaded with thousands either.
+
+So the app cannot "schedule the year". It schedules a window and tops it up.
+
+```ts
+const BUDGET = 60;                 // under 64, leaving room for §21.5
+
+function buildSchedule(now: number): LocalNotificationSchema[] {
+  const out: LocalNotificationSchema[] = [];
+  const tz = zoneName(meta);
+  let day = todayInZone(tz);
+
+  for (let i = 0; i < 30 && out.length < BUDGET; i++) {
+    for (const e of eventsFor(day.y, day.m, day.d)) {        // §4.3, unchanged
+      if (!prefs.prayers[e.key]) continue;
+      const add = (kind: 'at'|'pre'|'jam', at: number, title: string, body: string) => {
+        if (at <= now || out.length >= BUDGET) return;
+        out.push({
+          id: notifId(e.date, e.key, kind),
+          title, body,
+          channelId: channelFor(e.key),                      // §21.6
+          schedule: { at: new Date(at), allowWhileIdle: true },
+          extra: { key: e.key, kind, fireId: `${kind}:${e.date}:${e.key}` },
+        });
+      };
+      add('at', e.at, e.name, `It is now ${fmtTime(e.minutes)} — time for ${e.name}.`);
+      if (prefs.pre > 0 && !e.sun)
+        add('pre', e.at - prefs.pre * 60000,
+            `${e.name} in ${prefs.pre} min`, `${e.name} at ${fmtTime(e.minutes)}`);
+      if (prefs.jam > 0 && !e.sun && e.jamaahAt !== null)
+        add('jam', e.jamaahAt - prefs.jam * 60000,
+            `${e.name} iqamah in ${prefs.jam} min`, `Iqamah at ${fmtTime(e.jamaah!)}`);
+    }
+    day = addDays(day, 1);
+  }
+  return out;
+}
+```
+
+Notes that matter:
+- Events are built by **§4.3 unchanged** — same two-pass zone arithmetic, so the
+  25 October transition is handled identically to the board.
+- `fireId` in `extra` is the **same format as §9.4**, which is what lets the
+  foreground path and the OS path interlock (§21.7).
+- `allowWhileIdle: true` lets the notification fire in Android Doze. Capacitor's
+  docs note these *"can only fire once per 9 minutes, per app"* — fine here,
+  since prayers are never 9 minutes apart, but it is why `pre` and `jam`
+  offsets must not be set to values that collide with an adjacent `at`.
+- With all three kinds on, 60 slots is roughly **3–4 days** of cover. With
+  `at` only, about 10 days. State this in the UI (§21.5).
+
+## 21.4 When to reschedule
+
+Rebuild the schedule on every one of these:
+
+| Trigger | Why |
+|---|---|
+| App start | the baseline |
+| `App` resume (`appStateChange` → active) | tops the window up every time the user opens the app |
+| Midnight rollover in the tick loop (§7.5) | the day changed |
+| Any change to sound-per-prayer, `pre`, `jam`, or offsets | the schedule depends on them |
+| A timetable import (§10.6) or remote update (§25) | the times themselves changed |
+| Notification permission newly granted | nothing could be scheduled before |
+| Device reboot | Android clears alarms; re-schedule on next launch |
+| A notification firing | consumes a slot — top up |
+
+Debounce to one rebuild per ~2 s so a user dragging an offset input does not
+thrash the OS.
+
+## 21.5 The window-expiry problem — state it, mitigate it
+
+If the user never opens the app, the schedule runs out. After ~3–4 days of
+silence, alerts stop. This is the one real weakness of the local-notification
+approach and it must not be glossed over.
+
+Three mitigations, in order of value:
+
+1. **The last scheduled notification is a top-up reminder.** Schedule one
+   extra notification at the end of the window: *"Open Shaheed Bilal Mosque to
+   keep prayer alerts coming."* Opening the app rebuilds the window. Cheap,
+   reliable, no server. Budget one slot for it.
+2. **Background refresh.** iOS `BGAppRefreshTask` / Android `WorkManager`, via
+   a background-task plugin, to rebuild the schedule without the user. iOS
+   grants these at its own discretion and **may never run them** on a rarely
+   used app — treat it as a bonus, never as the mechanism.
+3. **Remote push as a backstop** (§13). A silent push wakes the app to
+   reschedule, giving an unbounded window. Only worth the server if 1 and 2
+   prove insufficient in practice.
+
+Ship with 1 and 2. Measure before adding 3.
+
+Also state it plainly in the UI, replacing the §9.7 web copy:
+
+> *"Alerts are scheduled on your phone, so they arrive with the app closed.
+> About a week's worth is scheduled at a time — open the app occasionally to
+> keep them topped up."*
+
+## 21.6 Android notification channels — a one-way door
+
+From Capacitor's docs: on Android 8+ the top-level `sound` is not the
+mechanism — *"use channelId of a channel configured with the desired sound"* —
+and a channel's sound *"can't be changed unless the app is uninstalled."*
+
+That is a trap. If channel sound is immutable and the user can choose between
+the adhan and a chime, you cannot mutate one channel; you must **create one
+channel per sound and route the notification to the right channel.**
+
+```ts
+await LocalNotifications.createChannel({
+  id: 'adhan-v1', name: 'Prayer times (adhan)', importance: 5,
+  sound: 'adhan.wav', visibility: 1, vibration: true,
+});
+await LocalNotifications.createChannel({
+  id: 'chime-v1', name: 'Prayer times (chime)', importance: 5,
+  sound: 'chime.wav', visibility: 1, vibration: true,
+});
+await LocalNotifications.createChannel({
+  id: 'silent-v1', name: 'Prayer times (silent)', importance: 3,
+  vibration: false,
+});
+
+const channelFor = (key: string) =>
+  settings.muted ? 'silent-v1'
+  : ({ azan: 'adhan-v1', beep: 'chime-v1', off: 'silent-v1' } as const)[settings.sound[key]];
+```
+
+- Capacitor's docs note channels with importance ≥ 3 should have a sound;
+  importance 5 is what puts the alert on the lock screen with sound.
+- The `-v1` suffix is deliberate. **If you ever change a bundled sound file,
+  bump to `-v2`** and create the new channel — the old channel keeps the old
+  sound forever on devices that already have it. Users can also override
+  channel sound in Android settings, and that is their right; do not fight it.
+- `settings.muted` routes to the silent channel. This keeps §9.1's rule intact
+  natively: **muting kills the sound, never the notification.**
+
+## 21.7 Permissions
+
+```ts
+let p = await LocalNotifications.checkPermissions();
+if (p.display !== 'granted') p = await LocalNotifications.requestPermissions();
+```
+
+- **Android 13+** requires the `POST_NOTIFICATIONS` runtime permission.
+  Capacitor's `schedule()` requests it if not already granted, but request it
+  explicitly from a user gesture so the prompt is expected — §9.2's rule about
+  never asking on load still applies.
+- **Android 12+** needs `SCHEDULE_EXACT_ALARM` in the manifest for exact
+  timing, and the user can switch exact alarms off in app settings.
+- **Android 14** offers `USE_EXACT_ALARM`, which needs no user prompt but is
+  reserved for apps where exact alarms are central to the purpose. A prayer-time
+  app is a textbook case — a notification five minutes late is useless — so
+  declare it, and be ready to justify it in the Play Console (§24.3).
+- Detect when exact alarms have been denied and say so in diagnostics rather
+  than letting alerts drift silently.
+
+Permission states map onto the existing §9.2 copy; keep the wording, drop the
+browser-settings phrasing in favour of the OS app settings.
+
+## 21.8 Diagnostics (§9.6) gains native lines
+
+```
+Notification permission : granted | denied | prompt
+Exact alarms (Android)  : allowed | denied by user | n/a
+Scheduled notifications : 57 pending, through 19 Oct 14:40
+Next scheduled          : Dhuhr at 13:16 (today)
+Channels                : adhan-v1, chime-v1, silent-v1
+Last notification fired : Dhuhr at 13:16:02 | none recorded
+Native platform         : ios 18.2 | android 15
+Web/native storage      : Preferences (native)
+```
+
+`Scheduled notifications … through <date>` is the single most useful line: it
+makes the §21.5 window visible instead of a silent cliff.
+
+## 21.9 Where §13 still earns its place
+
+Local notifications cannot deliver something the app did not already know. Keep
+§13's push server **only** if the mosque wants:
+- ad-hoc announcements (Eid timings, a funeral prayer, a closure);
+- an immediate timetable correction pushed to every device;
+- the unbounded-window backstop in §21.5.
+
+If so, §13's schema, failure handling and privacy rules apply as written, with
+`@capacitor/push-notifications` in place of the Web Push subscription, and
+**prayer alerts still scheduled locally** — never both, or every alert arrives
+twice. §13.12's single rule generalises: whichever path owns the notification,
+the other stays silent.
+
+## 21.10 Foreground dedupe
+
+With the OS scheduling notifications, the in-app tick (§7.5) must not also
+raise them. When running natively:
+
+- `fire()` **skips `notify()`** entirely — the OS already did it;
+- it still shows the in-app banner (§9.8) and plays audio (§9.5);
+- `azan.fired` and the `fireId` format stay exactly as specified, so an alert
+  handled by the OS is not re-handled by the page.
+
+Register a `localNotificationReceived` listener to mark the `fireId` fired and
+show the banner when the app is open; and `localNotificationActionPerformed`
+to bring the board to the front when the user taps the notification.
+
+---
+
+# 22. Native audio
+
+## 22.1 Two separate audio paths — do not conflate them
+
+| Path | When | Mechanism | Length |
+|---|---|---|---|
+| **Notification sound** | app closed or backgrounded | a file bundled in the app, played by the OS | short — see §22.3 |
+| **In-app playback** | app open | the existing §9.5 code, unchanged | full length |
+
+Part A's §9.5 priority chain (user file → bundled file → chime) stays exactly
+as written for the in-app path. §22 adds only the notification sound.
+
+## 22.2 Bundling the files
+
+Per Capacitor's docs: on iOS *"the sound file must be in the app bundle"*; on
+Android *"the file should be in res/raw folder"*; the filename must include its
+extension; and if the file is missing or misnamed, **the default system sound
+plays silently instead** — a failure mode that looks like "the adhan doesn't
+work".
+
+```
+ios/App/App/adhan.wav          and  chime.wav      (added to the Xcode target)
+android/app/src/main/res/raw/adhan.wav   chime.wav
+```
+
+Capacitor's docs recommend **`.wav`** as the format supported on both
+platforms. Use it; do not ship an mp3 and hope.
+
+Add a build check that fails if either file is missing from either platform
+folder. This is the single easiest thing to get silently wrong.
+
+## 22.3 The honest limit on iOS
+
+A notification sound on iOS is a short alert tone, not a media track — the
+documented ceiling is around **30 seconds**, beyond which the default sound is
+used instead. *Verify the exact behaviour on a device before committing to a
+file length.*
+
+So:
+
+- **Achievable:** a ≤30 s adhan excerpt as the notification sound, from a
+  locked phone, both platforms.
+- **Not reliably achievable:** a full 2–3 minute adhan from a closed app on
+  iOS. The routes to it are a background-audio mode (which Apple is likely to
+  reject for a notification use-case) or the Critical Alerts entitlement
+  (which requires a separate Apple approval and is intended for health and
+  safety apps). **Do not design around either.**
+- **Android** is more permissive, but channel-sound length is still
+  constrained in practice. Use the same excerpt on both for consistency.
+
+State this in the UI rather than letting users discover it:
+
+> *"The notification plays a short call to prayer. Open the app to hear the
+> full adhan."*
+
+This is a real improvement on Part A, where a closed app produced no sound at
+all — but it is not "the full adhan plays from your pocket", and promising
+that will produce complaints.
+
+## 22.4 Silent mode and Do Not Disturb
+
+A notification sound obeys the ringer switch and Do Not Disturb on both
+platforms. There is no supported way to override this short of iOS Critical
+Alerts (§22.3). Say so in the About card:
+
+> *"Alerts follow your phone's silent mode and Do Not Disturb settings. For a
+> guaranteed sound, set a clock alarm as well."*
+
+The clock-alarm advice from §9.7 stays. It was honest in Part A and it is
+still honest here.
+
+## 22.5 Licensing
+
+The app still ships **no** adhan recording until one is licensed —
+§9.5's reasoning is unchanged, and it now matters more because a store binary
+is a distribution. Options: a recording the mosque owns or has written
+permission to distribute, or a clearly-licensed recording with attribution.
+Keep the synthesised chime (§9.5) as the shipped default and the fallback, so
+the app is complete and submittable with no licensed audio at all.
+
+## 22.6 The user's own file
+
+`@capacitor/filesystem` replaces IndexedDB (§20.5). A user-chosen file plays
+**in-app only** — it cannot become the notification sound, because iOS and
+Android both require notification sounds to be bundled at build time. Say this
+on the Azan audio card:
+
+> *"Your own file plays while the app is open. Notification sounds are built
+> into the app and cannot be changed."*
+
+---
+
+# 23. Native platform integration
+
+## 23.1 Safe areas and the status bar
+
+The board already pads with `env(safe-area-inset-*)` (§6), which is why it
+needs no layout change natively. Add:
+
+- `ios: { contentInset: 'never' }` (§20.2), so the WebView does not add its own
+  inset on top of the CSS.
+- `StatusBar.setStyle({ style: Style.Dark })` — dark *content* on the light
+  sand background — and on Android `setBackgroundColor({ color: '#e9e5dc' })`.
+- Verify on a notched device and on a device with a home indicator that
+  §14.3's "no vertical scroll" still holds. The board is `100svh`; in a
+  WebView that resolves to the WebView's height, which is what you want.
+
+## 23.2 Splash screen
+
+`launchAutoHide: false`, and hide it from the app once the board has actually
+drawn — after `drawMat()` has run and the first `renderToday()` has completed:
+
+```ts
+await SplashScreen.hide({ fadeOutDuration: 150 });
+```
+
+Hiding on a timer instead shows a half-painted board. The splash is sand
+`#e9e5dc` with the masjid mark (§6.10) centred, so the transition to the board
+is invisible.
+
+## 23.3 Keep awake
+
+Replace the Web `navigator.wakeLock` path (§10.3) with
+`@capacitor-community/keep-awake`: `keepAwake()` when the setting is on and the
+app is active, `allowSleep()` when it is off or the app is backgrounded. The
+setting, its label and its sub-label stay as specified.
+
+## 23.4 Android hardware back button
+
+Without handling, back exits the app from any screen. Wire it to mirror the UI:
+
+```ts
+App.addListener('backButton', () => {
+  if (menuOpen)        closeMenu();
+  else if (view !== 'today') showView('today');
+  else                 App.exitApp();
+});
+```
+
+## 23.5 App lifecycle
+
+`App.addListener('appStateChange', ({ isActive }) => …)` replaces
+`visibilitychange` (§7.6). On becoming active: reset `lastDate`, re-render
+everything, re-apply keep-awake, **and rebuild the notification schedule**
+(§21.4). On becoming inactive: `allowSleep()`.
+
+## 23.6 Gestures the board must not have
+
+- Disable overscroll/bounce — a board that rubber-bands looks broken.
+  `ios: { contentInset: 'never' }` plus `overscroll-behavior: none` on `body`.
+- No pull-to-refresh.
+- Lock orientation to **portrait** in both native projects (the manifest
+  already declares it for the web build).
+- Disable text selection and the long-press callout on the board
+  (`-webkit-touch-callout: none`, `user-select: none`), while leaving the
+  Settings inputs selectable.
+
+---
+
+# 24. Store submission
+
+## 24.1 Apple guideline 4.2 — the main review risk
+
+Apple rejects apps that are a repackaged website with no native value. A
+Capacitor app is a WebView, so this is the realistic rejection risk. What
+mitigates it, in descending order of weight:
+
+1. **Bundled, fully offline** (§19.3) — not a URL loaded at runtime.
+2. **Native notifications** (§21) — scheduled with the OS, working with the
+   app closed. This is a genuine native capability and the strongest argument.
+3. **Native sound** (§22), keep-awake, splash, back-button handling.
+4. A purpose that is clearly an app, not a web page: a single mosque's
+   timetable, consulted daily, offline, with alerts.
+
+Put points 1–3 in the **review notes** explicitly rather than hoping the
+reviewer finds them.
+
+## 24.2 Review notes — draft
+
+> Shaheed Bilal Mosque is the prayer timetable for a single mosque in Dublin
+> 15, built for its congregation. Prayer times are transcribed from the
+> mosque's printed timetable and bundled in the app; nothing is calculated and
+> no network connection is required — the app is fully functional offline.
+>
+> The app schedules local notifications with the OS so that prayer alerts
+> arrive with the app closed and the device locked, plays a bundled call to
+> prayer as the notification sound, and keeps the screen awake while the board
+> is displayed.
+>
+> No account, no login, and no personal data is collected. Times are displayed
+> for Dublin, Ireland (Europe/Dublin).
+
+## 24.3 Declarations and metadata
+
+| Item | Value |
+|---|---|
+| Category | Reference, or Lifestyle |
+| Age rating | 4+ / Everyone |
+| Apple privacy ("App Privacy") | **Data Not Collected** — true as long as §13 is not built. If it is, declare the push token under *Identifiers → Device ID*, used for *App Functionality*, not linked to identity, not used for tracking. |
+| Play Data safety | same answer, same caveat |
+| Permissions declared | notifications; `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` |
+| Play Console exact-alarm justification | *"The app's core function is notifying users at exact prayer times taken from a published mosque timetable. A late notification does not serve the purpose."* Expect this to be reviewed. |
+| Encryption export (Apple) | no non-standard cryptography; the usual exemption applies — confirm against the current questionnaire |
+| Screenshots | the board on each required device size; plus the monthly timetable and settings |
+| Icon | §6.10 masjid mark on sand; iOS needs no alpha channel |
+
+## 24.4 Permission before you publish
+
+**Get the mosque's written agreement** before submitting an app that carries
+its name, publishes its timetable and appears to speak for it. Also agree who
+owns the developer account and the bundle id — if a volunteer submits under a
+personal account, the mosque cannot take it over later without republishing.
+
+This is the step most likely to be skipped and most expensive to fix.
+
+## 24.5 Pre-submission checklist
+
+- [ ] Static client-only build verified (§19.4); app opens with no network
+- [ ] `npx cap sync` run against the current web build
+- [ ] Versions aligned across web / iOS / Android (§20.4)
+- [ ] Sound files present in **both** platform folders (§22.2)
+- [ ] Notification permission prompt appears only from a user gesture
+- [ ] Alert verified on a real device with the app force-closed, both platforms
+- [ ] §14 (all of it) still passes inside the native WebView
+- [ ] §14.3 layout checks pass on a notched device and a short device
+- [ ] Back button, orientation lock, no overscroll (§23)
+- [ ] Review notes and privacy declarations filled (§24.2, §24.3)
+- [ ] Mosque's written permission on file (§24.4)
+
+---
+
+# 25. Shipping a new month without a store release
+
+## 25.1 The problem
+
+The app bundles 61 days (September–October 2026). November must reach users
+without waiting on app review, and without asking a congregation to update
+manually. Store review takes days and cannot be relied on for a date-driven
+release.
+
+## 25.2 Remote timetable with bundled fallback — the recommended answer
+
+```
+bundled timetable.json   (always present, always valid, works offline forever)
+        ↓ overridden by
+cached remote timetable  (fetched when possible, validated before use)
+        ↓ overridden by
+user-imported timetable  (§10.6, unchanged — the manual escape hatch)
+```
+
+Implementation:
+
+1. Host `timetable.json` at a stable URL — the same GitHub Pages deployment
+   that serves the web app already does this.
+2. Add `meta.revision` (an integer) and `meta.updated` (ISO date) to the file.
+3. On app start, and at most once a day, fetch it with a short timeout.
+   **Never block the board on this** — the board renders from the bundled or
+   cached copy immediately.
+4. **Validate before accepting**, using §14.6's rules exactly: key format,
+   time format, prayer ordering, iqamah gaps within 0–120 minutes. A malformed
+   or truncated download must be discarded, not displayed. A prayer app that
+   renders corrupt times is worse than one that is out of date.
+5. Accept only if `revision` is **higher** than the stored copy. Persist to
+   `@capacitor/preferences`.
+6. On acceptance: re-render, **rebuild the notification schedule** (§21.4),
+   and show a toast — *"Timetable updated to November 2026."*
+7. Surface the state in Settings → Timetable: `Bundled · 61 days` or
+   `Updated 2 Nov 2026 · 91 days · revision 3`.
+
+This keeps a store release for code changes only, which is where it belongs.
+
+## 25.3 What not to do
+
+- Do not fetch times at render time. The app must work with no network, and a
+  timetable that varies by connectivity is not trustworthy.
+- Do not drop the bundled copy. A fresh install on a plane must still work.
+- Do not accept a remote file without validation, and do not let a remote file
+  shrink coverage — a smaller day count than the bundled file means something
+  is wrong upstream.
+
+## 25.4 OTA code updates — optional, with caveats
+
+Capacitor supports over-the-air updates of the web bundle through third-party
+services (Capgo, Capawesome Cloud, Ionic Appflow). These are **commercial
+products from vendors who also publish the tutorials recommending them** —
+weigh accordingly.
+
+They are worth considering only if you expect frequent UI fixes. Apple permits
+JavaScript updates that do not change the app's purpose, but an OTA pipeline
+is another dependency, another cost, and another thing to debug. For an app
+whose data changes monthly and whose UI is finished, **§25.2 covers the real
+need and OTA is not required.**
+
+## 25.5 Monthly release routine
+
+When the mosque issues a new sheet:
+
+1. Transcribe it into `tools/tables/YYYY-MM.txt` (§3.4).
+2. Run the build script; bump `meta.revision`.
+3. Run the §14.6 validator — it must report 0 issues.
+4. Spot-check the new month against the printed sheet, including the first and
+   last day and any clock change.
+5. Deploy the JSON. Devices pick it up within a day (§25.2) and reschedule
+   their alerts automatically.
+6. Only if code changed: bump versions, `npx cap sync`, rebuild, resubmit.
+
+Steps 1–5 need no store involvement at all. That is the point.
