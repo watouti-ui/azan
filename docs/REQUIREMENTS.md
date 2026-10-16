@@ -47,7 +47,8 @@ Sunrise has only one time and no iqamah.
 - No qibla compass, no tasbih, no Quran, no mosque finder, no multi-mosque support.
 - No account, no login, no analytics, no tracking, no ads.
 - No calculated times, no geolocation.
-- No server-side component in Phase 1 (see §13 for the optional push backend).
+- No server-side component in Phase 1. Background alerts are an **option**,
+  specified in full in §13, behind a feature flag that is off by default.
 
 ## 1.5 Audiences
 
@@ -1173,6 +1174,9 @@ Timetable               : 61 days
 Version                 : 2.1.0
 ```
 
+When the §13 option is built, two of these lines change wording and a third
+is added — see §13.13.
+
 Plus, when present, a `Recent errors:` section holding the **last 6** errors,
 each prefixed with an `HH:MM:SS` timestamp. Errors are recorded by a
 `noteError(where, err)` helper that unshifts and truncates to 6.
@@ -1189,7 +1193,9 @@ in-app banner, then refreshes diagnostics) and `Why no lock-screen alerts?`
 ## 9.7 Background limits — must be stated in the UI, not hidden
 
 A static web app **cannot** schedule an alarm while it is closed. State this
-plainly in three places:
+plainly in three places. (When the §13 option is built **and active**, two of
+these strings change — see §13.13. Everywhere else, and in every other state,
+the copy below stands exactly as written.)
 
 1. **About** card: *"A web app cannot schedule alarms while it is closed. The
    Azan plays and notifications fire only while this app is open. For a
@@ -1262,6 +1268,7 @@ adhan times only. Saves immediately and re-renders everything.
 ## 10.3 Alerts
 | Control | Type | Range / states | Notes |
 |---|---|---|---|
+| Background alerts | switch | 7 states | **Only when the §13 option is built and its feature flag is set.** Full state table and copy in §13.13. The row is absent, not disabled, when the flag is unset. |
 | Notifications | button | Enable / Enabled / Blocked | §9.2. Sub-label: *"Shows a banner at prayer time while the app is running."* |
 | Pre-prayer reminder | number | 0–60, 0 = off | *"Minutes before the adhan."* |
 | Iqamah reminder | number | 0–60, 0 = off | *"Minutes before the congregation."* Row hidden when `meta.jamaah` is false. |
@@ -1330,6 +1337,7 @@ top. Only one `.view` carries `.on` at a time.
 | localStorage | `azan.settings` | the settings object below |
 | localStorage | `azan.timetable` | a full `{meta, days}` object — an imported timetable, which overrides the bundled file |
 | localStorage | `azan.fired` | `{ date: 'YYYY-MM-DD', keys: string[] }` |
+| localStorage | `azan.push` | `{ endpoint, prefs, at }` — what was last registered with the alert server. **Only when the §13 option is built.** |
 | IndexedDB | `azan-db` v1 → store `files` → key `azan` | the user's azan audio `Blob` |
 
 Defaults:
@@ -1455,7 +1463,9 @@ Skip service-worker registration entirely in a single-file build.
 ## 12.4 Push handlers
 
 Include them now even though no backend exists — they are the app half of the
-contract, and they are what the test path uses.
+contract, and they are what the test path uses. If the §13 option is built,
+the payload gains `kind` and `fireId` (§13.10) and the `push` handler also
+messages open pages (§13.12); the handlers below are otherwise unchanged.
 
 - `push`: parse `event.data.json()` with a text fallback; show a notification
   with `{title, body, icon, badge, tag: payload.tag ?? 'azan', renotify:true,
@@ -1471,25 +1481,527 @@ contract, and they are what the test path uses.
 
 ---
 
-# 13. Phase 2 (optional) — real background alerts
+# 13. Option: background alerts (lock-screen, app closed)
 
-Everything above delivers alerts **only while the app is open**. Lock-screen
-alerts with the app closed require a push server. Scope, if it is wanted:
+Everything in §1–§12 delivers alerts **only while the app is open**. This
+section specifies the optional addition that makes alerts arrive with the app
+closed and the screen off.
 
-1. Generate a VAPID key pair.
-2. `reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey })`
-   and POST the subscription to the backend.
-3. Backend (Supabase Edge Function + `pg_cron`, or a Cloudflare Worker +
-   Durable Object / Cron Trigger — both have adequate free tiers): hold the
-   timetable, and for each subscription send a Web Push at each prayer time in
-   `Europe/Dublin`.
-4. Payload: `{title, body, tag, at, key, url}` — the `push` handler in §12.4
-   already consumes this shape.
-5. iOS requires the app to be installed to the Home Screen before it will
-   expose Web Push at all (§9.7).
+It is a **feature-flagged option**, not a rewrite. With the flag unset the app
+must behave byte-for-byte as Phase 1 — same screens, same controls, no dead
+buttons, no network calls. Build Phase 1 first and ship it; add this when the
+mosque wants it.
 
-If Lovable's Supabase integration is used, this is the natural home for it.
-It is **out of scope for Phase 1** and nothing in Phases 1 depends on it.
+## 13.1 Why a server is unavoidable
+
+A browser cannot wake a closed web app on a timer. `setTimeout`,
+`setInterval`, Background Sync and Periodic Background Sync are all either
+killed with the page or unavailable on iOS. The **only** mechanism that wakes
+a service worker with the app closed is **Web Push**, and Web Push requires a
+server holding a VAPID key to send the message.
+
+So the choice is not "local scheduling vs server" — it is "server, or
+foreground-only". There is no third option, and any implementation that claims
+otherwise will fail silently on a real phone.
+
+## 13.2 Scope of the option
+
+| In scope | Out of scope |
+|---|---|
+| Notifications at adhan, pre-adhan and pre-iqamah, delivered with the app closed | Playing the Azan **audio** while closed — a service worker cannot play audio. Push shows a notification; the phone's own notification sound plays. |
+| Per-device opt-in, per-device reminder offsets | Per-user accounts, login, profiles |
+| iOS (installed to Home Screen), Android, desktop Chrome/Edge/Firefox | iOS Safari **not** installed to the Home Screen — the platform does not expose push there |
+| Automatic cleanup of expired subscriptions | Any analytics or tracking |
+
+State the audio limitation in the UI. A user who turns this on and expects the
+Azan to sound from a locked phone will think it is broken.
+
+## 13.3 Feature flag
+
+Two environment variables. **Both** must be present and non-empty for any of
+this to activate:
+
+```
+VITE_PUSH_API_URL=https://<project>.supabase.co/functions/v1
+VITE_PUSH_VAPID_PUBLIC_KEY=BK...   # base64url, ~87 chars
+```
+
+```ts
+export const PUSH_ENABLED =
+  !!import.meta.env.VITE_PUSH_API_URL &&
+  !!import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY;
+```
+
+When `PUSH_ENABLED` is false:
+- the Settings → Alerts "Background alerts" row is **not rendered** (not
+  rendered disabled — absent);
+- the diagnostics line reads `none (no push backend configured)`;
+- `explainBackground()` uses the Phase 1 copy (§9.7);
+- no request is made to any origin but the app's own.
+
+The public VAPID key is public by design — it is sent to every client. The
+**private** key lives only in server secrets and must never reach the bundle.
+
+## 13.4 Architecture
+
+Recommended: **Supabase**, because Lovable integrates it directly.
+
+```
+┌─────────────┐   register/unregister    ┌──────────────────────┐
+│  PWA client │ ───────────────────────► │ Edge: subscriptions  │
+│  (service   │                          └──────────┬───────────┘
+│   worker)   │                                     │
+│             │                          ┌──────────▼───────────┐
+│             │                          │ Postgres             │
+│             │                          │  push_subscriptions  │
+│             │                          │  prayer_days         │
+│             │                          │  push_log            │
+│             │                          │  push_config         │
+│             │                          └──────────┬───────────┘
+│             │                                     │ every minute
+│             │        Web Push (VAPID)   ┌──────────▼───────────┐
+│             │ ◄──────────────────────── │ Edge: dispatch-alerts│
+└─────────────┘        via push service   └──────────────────────┘
+                                                    ▲
+                                          pg_cron ──┘  '* * * * *'
+```
+
+Cloudflare Workers + Cron Triggers + D1 is an equivalent alternative. The
+contracts below (§13.6–§13.9) are host-agnostic; only the deployment differs.
+
+### Cost at this scale
+A once-a-minute cron is ~44,640 invocations in a 31-day month. At the time of
+writing that sits inside both Supabase's and Cloudflare's free function
+allowances with room to spare, and a single-mosque congregation (hundreds of
+devices, low thousands at most) adds little on top. **Check both providers'
+current limits before committing** — they change, and this spec should not be
+trusted on a billing question. Push delivery itself is free: it goes through
+the browser vendors' own push services.
+
+If the per-minute cron is ever the constraint, the dispatcher can run every
+5 minutes and widen its due window to 5 minutes — at the cost of alerts that
+are up to 5 minutes late, which for a prayer notification is not acceptable.
+Per-minute is the right cadence; budget for it.
+
+## 13.5 Database schema
+
+```sql
+-- One row per device/browser that opted in.
+create table push_subscriptions (
+  id          uuid primary key default gen_random_uuid(),
+  endpoint    text not null unique,          -- the device identifier
+  p256dh      text not null,                 -- subscription keys
+  auth        text not null,
+  prefs       jsonb not null default '{}',   -- see §13.7
+  tz          text,                          -- device zone, diagnostics only
+  user_agent  text,
+  enabled     boolean not null default true,
+  failures    int not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  last_sent_at timestamptz
+);
+
+-- The timetable, server-side. Mirrors azan/data/timetable.json exactly.
+create table prayer_days (
+  md       text primary key,                 -- 'MM-DD'
+  fajr     text not null, sunrise text not null, dhuhr text not null,
+  asr      text not null, maghrib text not null, isha  text not null,
+  jamaah   jsonb not null default '{}'       -- {"fajr":"06:15", ...}
+);
+
+-- Dedupe + observability. One row per (device, alert) actually attempted.
+create table push_log (
+  subscription_id uuid not null references push_subscriptions(id) on delete cascade,
+  fire_id         text not null,             -- 'at:2026-10-16:dhuhr'
+  sent_at         timestamptz not null default now(),
+  status          int,                       -- HTTP status from the push service
+  error           text,
+  primary key (subscription_id, fire_id)
+);
+
+create index push_log_sent_at_idx on push_log (sent_at);
+
+-- Single-row config.
+create table push_config (
+  id        int primary key default 1 check (id = 1),
+  timezone  text not null default 'Europe/Dublin',
+  mosque    text not null default 'Shaheed Bilal Masjid',
+  data_hash text                             -- sha256 of the seeded timetable
+);
+```
+
+**Row Level Security:** enable RLS on every table and grant **no** anon
+policies. All access goes through Edge Functions using the service-role key.
+A client must never be able to read the subscription table — the endpoints in
+it are device identifiers.
+
+Retention: delete `push_log` rows older than 30 days on a nightly cron. They
+exist for dedupe and debugging, not history.
+
+## 13.6 Seeding the server timetable — and proving it matches
+
+The server must send times identical to the ones the app displays. A drift
+between the two is a silent correctness bug of exactly the kind this app
+exists to avoid.
+
+1. A seeding script reads `azan/data/timetable.json` and upserts every day
+   into `prayer_days`, then writes `push_config.data_hash` = SHA-256 of the
+   canonical JSON of `days` (keys sorted, no whitespace).
+2. The client computes the same hash over its own loaded `days` at boot
+   (cheap: do it once, cache in memory).
+3. `GET /functions/v1/timetable-hash` returns `{ data_hash, days }`.
+4. The diagnostics panel gains a line:
+
+```
+Server timetable        : matches (61 days) | MISMATCH — server 59 days, app 61
+```
+
+5. On mismatch the client shows a warning banner in Settings:
+   *"The alert server has a different timetable from this app. Background
+   alerts may fire at the wrong times until it is updated."*
+
+Re-run the seeding script every time `timetable.json` changes. Make it part of
+the release checklist alongside bumping the service-worker cache name.
+
+## 13.7 Per-device preferences
+
+The server decides what to send, so it needs the subset of settings that
+affects scheduling. Nothing else is sent.
+
+```jsonc
+{
+  "prayers": { "fajr":true, "sunrise":false, "dhuhr":true,
+               "asr":true, "maghrib":true, "isha":true },
+  "pre": 10,        // minutes before adhan, 0 = off   (mirrors settings.pre)
+  "jam": 5          // minutes before iqamah, 0 = off  (mirrors settings.jam)
+}
+```
+
+- `prayers[key]` is true when that prayer's sound mode is **not** `off`, OR
+  when the user has background alerts on and wants the notification regardless
+  of sound. Resolve this explicitly: **`prayers[key] = true` unless the user
+  has silenced that prayer entirely.** Sound mode `beep` and `azan` both mean
+  "notify me"; only `off` means "do not".
+- `settings.muted` is **not** sent. Muting is a local audio decision (§9.1)
+  and must never suppress a notification.
+- The client PUTs prefs on change, debounced 2 s, and on every boot where
+  they differ from the last-sent copy (keep a `azan.push` record of what was
+  sent, so an offline change is retried later).
+
+## 13.8 Client flow
+
+```ts
+async function enableBackgroundAlerts(): Promise<PushState> {
+  if (!PUSH_ENABLED) return 'unavailable';
+  if (pushBlockedByInstall()) return 'needs-install';       // iOS, not installed
+  if (Notification.permission !== 'granted') {
+    const perm = await Notification.requestPermission();     // user gesture
+    if (perm !== 'granted') return 'needs-permission';
+  }
+  const reg = await navigator.serviceWorker.ready;
+  if (!reg.pushManager) return 'unsupported';
+
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,                                   // required by Chrome
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+  });
+
+  await fetch(`${PUSH_API}/register-subscription`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      subscription: sub.toJSON(),
+      prefs: currentPushPrefs(),
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      userAgent: navigator.userAgent,
+    }),
+  });
+
+  LS.set('azan.push', { endpoint: sub.endpoint, prefs: currentPushPrefs(),
+                        at: new Date().toISOString() });
+  return 'active';
+}
+
+async function disableBackgroundAlerts() {
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    await fetch(`${PUSH_API}/unregister-subscription`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    }).catch(() => {});                    // unsubscribe locally even if offline
+    await sub.unsubscribe();
+  }
+  LS.del('azan.push');
+}
+```
+
+`urlBase64ToUint8Array` is the standard VAPID key conversion — base64url to
+base64, pad to a multiple of 4, `atob`, then byte-by-byte into a `Uint8Array`.
+Passing the raw string instead will throw `InvalidCharacterError`.
+
+### Subscription rotation
+The service worker already relays `pushsubscriptionchange` to open pages
+(§12.4). On receiving that message the page must re-subscribe and re-register,
+then replace `azan.push`. Browsers rotate subscriptions without warning; an
+app that ignores this stops receiving alerts weeks later with no error.
+
+## 13.9 Server dispatch logic
+
+Runs every minute. Must mirror the client's rules exactly (§7.1, §9.4).
+
+```
+1.  now        := current instant
+    zone       := push_config.timezone              -- 'Europe/Dublin'
+    local      := now in zone (y, m, d, hh, mm)
+    today      := prayer_days['MM-DD'] for local    -- skip run if absent
+    yesterday  := prayer_days for local - 1 day     -- for a late-night window
+
+2.  Build the day's events exactly as §4.3 does, resolving each wall-clock
+    time to an instant with the same two-pass zone arithmetic. Do NOT add
+    minutes to midnight.
+
+3.  For each enabled subscription, for each event, for each kind:
+      at   -> due_at = event.at
+      pre  -> due_at = event.at      - prefs.pre * 60s   (skip if pre  = 0)
+      jam  -> due_at = event.jamaahAt - prefs.jam * 60s  (skip if jam = 0
+                                                          or no iqamah
+                                                          or event is sunrise)
+    Skip the event entirely when prefs.prayers[event.key] is false.
+    Skip 'sunrise' for kinds 'pre' and 'jam'.
+
+4.  Due window:  now - 90s <= due_at <= now
+    The 90 s window matches the client and tolerates a late cron run. A run
+    that is more than 90 s late skips that alert rather than sending it stale
+    — a prayer notification two minutes late is worse than none.
+
+5.  fire_id := kind || ':' || local date (YYYY-MM-DD) || ':' || event.key
+    Insert into push_log with ON CONFLICT DO NOTHING. If zero rows were
+    inserted, this alert already went to this device — skip it.
+    The insert IS the lock: it makes overlapping cron runs safe.
+
+6.  Send the Web Push with the payload in §13.10.
+
+7.  Record the result (§13.11).
+```
+
+**Scaling note.** The per-subscription loop is O(devices × events). At a few
+thousand devices that is a few tens of thousands of cheap comparisons per
+minute — fine. If it ever matters, group subscriptions by their distinct
+`(pre, jam, prayers)` tuple, compute due events once per group, and fan out.
+
+**Library note.** Web Push needs VAPID JWT signing plus AES128GCM payload
+encryption — do not hand-roll it. In a Deno edge function, a Web Crypto-native
+library (e.g. `jsr:@negrel/webpush`) is the safer choice; `npm:web-push` is
+written against Node's `crypto` and relies on the runtime's Node compatibility
+layer. **Verify whichever you pick actually sends to a real device before
+building on it** — this is the step most likely to need adjustment, and a
+silent failure here looks exactly like "push doesn't work on my phone".
+
+## 13.10 Payload contract
+
+Extends the shape in §12.4. The `push` handler there already consumes
+`title`, `body`, `tag`, `at`, `key` and `url`; add `kind` and `fireId`.
+
+```jsonc
+{
+  "title": "Dhuhr",
+  "body":  "It is now 13:16 — time for Dhuhr.",
+  "tag":   "azan",            // same tag => a newer alert REPLACES an older one
+  "kind":  "at",              // 'at' | 'pre' | 'jam'
+  "key":   "dhuhr",
+  "at":    1792152960000,     // epoch ms of the event
+  "fireId":"at:2026-10-16:dhuhr",
+  "url":   "./index.html"
+}
+```
+
+Copy must match the in-app alerts in §9.4 word for word, so a user who sees
+both does not read them as two different events:
+
+| kind | title | body |
+|---|---|---|
+| `at` | `Dhuhr` | `It is now 13:16 — time for Dhuhr.` |
+| `pre` | `Dhuhr in 10 min` | `Dhuhr at 13:16` |
+| `jam` | `Dhuhr iqamah in 5 min` | `Iqamah at 13:50` |
+
+Times are formatted server-side in the mosque's zone, 24-hour, no leading zero
+on the hour — `13:16`, `5:49` (§4.5). The server does not know the device's
+`use24` setting; 24-hour matches the board and is the documented default.
+
+## 13.11 Failure handling
+
+| Push service response | Action |
+|---|---|
+| `201` / `200` | reset `failures` to 0, set `last_sent_at` |
+| `404` / `410 Gone` | **delete the subscription row** — the device uninstalled or the endpoint expired. This is normal, not an error. |
+| `429 Too Many Requests` | honour `Retry-After`; do not count as a failure |
+| `413 Payload Too Large` | log and drop; the payload is a bug, not a transient fault |
+| other `4xx` | increment `failures`, log the body |
+| `5xx` / network | increment `failures`, leave the `push_log` row so it is not retried stale |
+
+Set `enabled = false` after **10** consecutive failures, and keep the row for
+diagnosis rather than deleting it. Expose a count of disabled subscriptions
+somewhere you will actually look — a quietly emptying subscriber table is the
+failure mode you will not notice.
+
+## 13.12 Avoiding double alerts when the app is open
+
+With push active, both the server and the open page can alert for the same
+event. Resolve it with one rule: **when push is active, push owns the
+notification; the page owns the audio and the in-app banner.**
+
+Service worker (`push` handler, in addition to §12.4):
+
+```js
+// Tell any open page what just arrived so it can play audio and
+// mark the alert as handled.
+event.waitUntil((async () => {
+  await self.registration.showNotification(title, opts);
+  const list = await self.clients.matchAll({ type:'window', includeUncontrolled:true });
+  for (const c of list) c.postMessage({ type:'push-alert', ...payload });
+})());
+```
+
+Page:
+
+```ts
+navigator.serviceWorker.addEventListener('message', ev => {
+  if (ev.data?.type !== 'push-alert') return;
+  const { fireId, key, kind } = ev.data;
+  if (alreadyFired(fireId)) return;
+  markFired(fireId);                      // also broadcast, per §9.4
+  showInApp(ev.data.title, ev.data.body); // banner
+  if (!settings.muted) playForKind(kind, key);   // audio only
+});
+```
+
+And in the local tick (§7.5): when `pushActive` is true, `fire()` must **skip
+its `notify()` call** and do only the banner and audio. Everything else —
+the 90 s window, the `azan.fired` store, the BroadcastChannel dedupe — is
+unchanged, and the shared `fireId` format is what makes the two paths
+interlock.
+
+Belt and braces: the shared `tag: 'azan'` means a duplicate notification
+*replaces* rather than stacks, so a mistake here degrades to one visible
+notification rather than two.
+
+## 13.13 UI changes
+
+### Settings → Alerts, new first row
+
+| | |
+|---|---|
+| Label | **Background alerts** |
+| Sub-label | *"Notifications reach your lock screen with the app closed. The Azan audio still needs the app open."* |
+| Control | switch |
+
+Switch states and what each shows:
+
+| State | Switch | Sub-label replacement |
+|---|---|---|
+| `unavailable` | row absent | — |
+| `needs-permission` | off | *"Allow notifications first."* |
+| `needs-install` (iOS, not installed) | off, disabled | *"Add the app to your Home Screen first: Share → Add to Home Screen, then open it from there."* |
+| `unsupported` | off, disabled | *"This browser does not support background alerts."* |
+| `subscribing` | off, spinner | *"Registering…"* |
+| `active` | on | *"On — registered 16 Oct."* |
+| `error` | off | *"Could not register. Try again, or check your connection."* |
+
+Turning it **off** unsubscribes and deletes the server row. Do not leave an
+orphaned subscription — the server will keep sending to a device whose user
+asked it to stop.
+
+### Diagnostics (§9.6), two lines change and one is added
+
+```
+Push subscription       : active since 16 Oct | none | needs Home Screen install | not supported here
+Server timetable        : matches (61 days) | MISMATCH — server 59 days, app 61
+Last push received      : Dhuhr at 13:16:04 | none this session
+```
+
+### Background-limits copy (§9.7) becomes conditional
+
+Replace the three Phase 1 strings when `pushActive` is true:
+
+- About card: *"Notifications reach your lock screen with the app closed.
+  The Azan audio plays only while the app is open — a closed web app cannot
+  play sound. Keep a clock alarm if you rely on hearing it."*
+- `Why no lock-screen alerts?` → relabel the button **`About background
+  alerts`**, body: *"Background alerts are on. Notifications arrive with the
+  app closed; audio needs the app open."*
+
+Leave the Phase 1 copy exactly as written for every other state. The honesty
+of that copy is a feature — it is why users trusted the app enough to report
+the real bugs.
+
+## 13.14 Privacy
+
+Say this plainly in the About card when the option is on:
+
+> *"Turning on background alerts stores one anonymous device token on the
+> mosque's alert server, so it can send the notification. No name, email,
+> phone number or location is stored, and there is no account. Turning the
+> switch off deletes it."*
+
+And honour it:
+- store only `endpoint`, `p256dh`, `auth`, `prefs`, `tz`, `user_agent`;
+- **no IP logging** beyond whatever the platform does by default;
+- delete on unsubscribe and on `410 Gone`;
+- RLS closed to anon (§13.5), service-role key server-side only;
+- no third-party analytics anywhere in the function.
+
+The `endpoint` is a stable device identifier. Treat it as personal data even
+though it carries no name.
+
+## 13.15 Acceptance criteria
+
+Must be tested on a **real phone**, from the **published URL**, with the app
+**fully closed** (swiped away, not backgrounded). Nothing in this section can
+be verified in a preview iframe or a desktop emulator.
+
+1. **Flag off:** with either env var unset, the Settings row is absent,
+   diagnostics reads `none (no push backend configured)`, and a network trace
+   shows no request to any other origin.
+2. **Android, app closed:** a notification arrives within 60 s of the adhan
+   minute, on the lock screen, with the correct prayer name and time.
+3. **iOS, installed to Home Screen, app closed:** same.
+4. **iOS, not installed:** the row is disabled with the install sub-label, and
+   no subscribe attempt is made.
+5. **No double alert:** with the app open and in the foreground, exactly one
+   notification and one in-app banner per event (§13.12).
+6. **Dedupe across devices:** two devices both registered → each gets exactly
+   one notification; one device's `push_log` row does not suppress the other's.
+7. **Cron restart:** kill and restart the cron mid-day → no duplicate alerts
+   for events already sent (the `push_log` unique key holds).
+8. **Late run:** delay the dispatcher by 3 minutes → the missed alert is
+   **not** sent (outside the 90 s window) and is logged as skipped.
+9. **Expiry:** revoke a subscription in the browser → the next send returns
+   `410` and the row is deleted.
+10. **Rotation:** force `pushsubscriptionchange` → the client re-registers and
+    the old endpoint stops receiving.
+11. **Timetable match:** change one time in the server table → diagnostics
+    shows `MISMATCH` and the Settings warning appears.
+12. **Opt-out:** turn the switch off → the server row is gone and no further
+    notifications arrive.
+13. **DST:** with the clock set to 25 October, alerts fire at the winter times
+    (Dhuhr 12:11, not 13:11) — the server's zone arithmetic is correct.
+14. **Unchanged Phase 1:** the whole of §14 still passes with the flag on.
+
+## 13.16 Release checklist for this option
+
+- [ ] VAPID keys generated; private key in server secrets only; public key in
+      the client env var
+- [ ] RLS enabled on all four tables, no anon policies
+- [ ] `prayer_days` seeded from the current `timetable.json`; `data_hash`
+      written; client reports `matches`
+- [ ] Cron scheduled `* * * * *`; log-retention cron scheduled nightly
+- [ ] Push send verified end-to-end to a real device (§13.9 library note)
+- [ ] §13.15 cases 1–14 pass
+- [ ] Privacy copy present in the About card
+- [ ] Runbook written: how to re-seed after a new month, and where to look
+      when a user says alerts stopped
 
 ---
 
@@ -1691,6 +2203,17 @@ approximately right and approximately wrong.
 | 11 | Notifications, sound, dedupe, in-app banner, diagnostics (§9). | §14.4, all seven cases — **on a published URL, not the preview iframe**. |
 | 12 | PWA: manifest, icons, custom service worker, update strategy (§12). | Installs to a phone home screen; a redeploy is picked up without clearing site data. |
 
+**Stop here and ship.** Steps 1–12 are the whole product for a mosque that is
+content with foreground alerts, and everything above is verifiable without a
+backend. Only continue if background alerts are actually wanted.
+
+| Step | Ask for | Verify before moving on |
+|---|---|---|
+| 13 | The feature flag and the client subscribe/unsubscribe flow (§13.3, §13.8) with the Settings row and all seven states (§13.13), against a **stub** endpoint. | With the flag unset the row is absent and no external request is made; with it set, every state renders correctly. |
+| 14 | Supabase: the four tables with RLS closed to anon (§13.5), the register/unregister Edge Functions, and the timetable seeding script plus the hash check (§13.6). | Diagnostics reports `Server timetable: matches (61 days)`; anon cannot read `push_subscriptions`. |
+| 15 | The `dispatch-alerts` function (§13.9), the payload (§13.10), failure handling (§13.11), and the `* * * * *` cron. | A real notification arrives on a real phone with the app closed. Do this before anything else in step 15 is considered done. |
+| 16 | Double-alert resolution (§13.12), the conditional UI copy and privacy text (§13.13, §13.14). | §13.15 cases 1–14, plus the whole of §14 still passing with the flag on. |
+
 ## 16.1 Prompt-level instructions worth repeating to Lovable
 
 - "Do not add a date library. Use `Intl.DateTimeFormat` only."
@@ -1703,13 +2226,20 @@ approximately right and approximately wrong.
   or to Tailwind spacing tokens."
 - "The mat is one continuous outline enclosing the clock and the whole table.
   Do not split it into a header arch plus a table border."
+- "Do not add a backend, Supabase, or push notifications unless I ask for
+  §13. Phase 1 makes no network request to any origin but its own."
+- "Background alerts are behind a feature flag. With the flag unset, the
+  Settings row must be absent — not disabled, not a placeholder."
 
 ---
 
 # 17. Known limitations (state these to users, do not hide them)
 
-1. **No background alerts.** Alerts fire only while the app is open. A closed
-   web app cannot schedule an alarm or play audio. §13 is the fix.
+1. **No background alerts in Phase 1.** Alerts fire only while the app is
+   open. A closed web app cannot schedule an alarm or play audio. §13
+   specifies the option that fixes the notification half of this; the **audio**
+   half cannot be fixed at all — a service worker cannot play sound, so a
+   locked phone gets a notification, not the Azan.
 2. **Coverage is finite.** The app ships September and October 2026. Other
    dates show "No times" until the months are added. The coverage banner says
    so explicitly.
