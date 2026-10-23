@@ -2,7 +2,7 @@
    No times are calculated or fetched: what you import is what is shown. */
 'use strict';
 
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 
 const PRAYERS = [
   { k: 'fajr',    n: 'Fajr',    i: '🌙' },
@@ -464,7 +464,13 @@ async function loadAzanAudio() {
   else if (window.__AZAN_STANDALONE__) { azanSource = 'chime'; }
   else {
     try {
-      const r = await fetch('audio/azan.mp3', { method: 'HEAD' });
+      // A HEAD request bypasses the service worker, so this one goes to the
+      // network even when everything else is served from cache. On a dead
+      // connection it would hang indefinitely, so it gets its own deadline.
+      const ctl = new AbortController();
+      const bail = setTimeout(() => ctl.abort(), 2500);
+      const r = await fetch('audio/azan.mp3', { method: 'HEAD', signal: ctl.signal });
+      clearTimeout(bail);
       if (r.ok) { azanSource = 'bundled'; azanUrl = 'audio/azan.mp3'; }
       else azanSource = 'chime';
     } catch (e) { azanSource = 'chime'; }
@@ -478,7 +484,20 @@ async function loadAzanAudio() {
 // --------------------------------------------------------- diagnostics ----
 // Failures here are silent by nature, so everything the alert path depends on
 // is recorded and shown rather than swallowed.
-const diag = { errors: [], lastAlert: null, swState: 'not registered', sub: 'none', reg: null };
+const diag = { errors: [], lastAlert: null, swState: 'not registered', sub: 'none',
+               reg: null, offlineReady: 'checking' };
+
+// Where today's times actually came from, which is the question worth asking
+// when someone reports wrong times after a spell with no signal.
+function timetableSource() {
+  const meta = (timetable && timetable.meta) || {};
+  if (meta.placeholder) return 'none - bundled sample';
+  if (LS.get('azan.timetable', null)) return 'imported' + (meta.source ? ' (' + meta.source + ')' : '');
+  if (window.__AZAN_STANDALONE__) return 'built into this page';
+  const lastGood = LS.get('azan.lastGood', null);
+  if (lastGood && bundled === lastGood) return 'saved copy (network unavailable)';
+  return 'bundled file';
+}
 
 function noteError(where, err) {
   const line = where + ': ' + (err && err.message ? err.message : String(err));
@@ -510,6 +529,25 @@ async function refreshDiagnostics() {
       diag.swState = reg
         ? (navigator.serviceWorker.controller ? 'active and controlling this page' : 'registered, not yet controlling')
         : 'not registered';
+      // Offline readiness is a fact about the cache, so check it rather than
+      // inferring it from the worker being registered.
+      try {
+        if (window.caches) {
+          const keys = await caches.keys();
+          const mine = keys.filter(k => k.indexOf('azan-') === 0);
+          if (!mine.length) diag.offlineReady = 'no — nothing cached yet';
+          else {
+            const cache = await caches.open(mine[0]);
+            const need = ['./index.html', './app.js', './data/timetable.json'];
+            const hits = await Promise.all(need.map(u => cache.match(u)));
+            const missing = need.filter((u, i) => !hits[i]);
+            diag.offlineReady = missing.length
+              ? 'partial — missing ' + missing.join(', ')
+              : 'yes — ' + mine[0];
+          }
+        } else diag.offlineReady = 'no — Cache API unavailable';
+      } catch (e) { diag.offlineReady = 'unknown'; noteError('caches', e); }
+
       if (reg && reg.pushManager) {
         try {
           const sub = await reg.pushManager.getSubscription();
@@ -536,6 +574,9 @@ function renderDiagnostics() {
     'Installed to home screen: ' + (isStandalone() ? 'yes' : 'no'),
     'Platform                : ' + (isIOS() ? 'iOS' : 'other'),
     'Service worker          : ' + diag.swState,
+    'Offline ready           : ' + diag.offlineReady,
+    'Network                 : ' + (navigator.onLine === false ? 'offline' : 'online'),
+    'Timetable source        : ' + timetableSource(),
     'Push subscription       : ' + diag.sub,
     'Sound                   : ' + (settings.muted ? 'off (notifications only)' : 'on'),
     'Audio unlocked          : ' + (audioReady ? 'yes' : 'no — tap the page once'),
@@ -1089,15 +1130,37 @@ async function applyWakeLock() {
 
 /* ------------------------------------------------------------------ boot  */
 
+// A timetable is only usable if it actually carries days; an empty object would
+// render every date as "No times", which looks like data loss rather than a
+// failed load.
+function usable(tt) {
+  return !!(tt && tt.days && Object.keys(tt.days).length);
+}
+
 async function loadTimetable() {
   const stored = LS.get('azan.timetable', null);
   if (window.__AZAN_TIMETABLE__) {
     bundled = window.__AZAN_TIMETABLE__;          // single-file build
   } else {
     try {
-      const res = await fetch('data/timetable.json', { cache: 'no-cache' });
+      // Boot must not wait on the network. The service worker already serves a
+      // cached copy within its own timeout, and this covers the case where no
+      // worker has taken control yet - a first visit that goes offline, or a
+      // browser with service workers unavailable.
+      const ctl = new AbortController();
+      const bail = setTimeout(() => ctl.abort(), 4000);
+      const res = await fetch('data/timetable.json', { cache: 'no-cache', signal: ctl.signal });
+      clearTimeout(bail);
       if (res.ok) bundled = await res.json();
     } catch (e) {}
+
+    // Keep the last timetable that loaded cleanly, so a cache miss or an
+    // evicted cache falls back to real times instead of the sample.
+    if (usable(bundled)) LS.set('azan.lastGood', bundled);
+    else {
+      const lastGood = LS.get('azan.lastGood', null);
+      if (usable(lastGood)) bundled = lastGood;
+    }
   }
   timetable = stored || bundled || { meta: { name: 'No timetable', placeholder: true }, days: {} };
   if (!timetable.days) timetable.days = {};
@@ -1251,6 +1314,9 @@ function wire() {
     lastDate = ''; renderAll(); toast('Saved');
   };
 
+  window.addEventListener('online', refreshDiagnostics);
+  window.addEventListener('offline', refreshDiagnostics);
+
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { lastDate = ''; renderAll(); applyWakeLock(); }
   });
@@ -1270,7 +1336,6 @@ function wire() {
 (async function boot() {
   await loadTimetable();
   wire();
-  await loadAzanAudio();
   renderAll();
   renderClock();
   drawMat();
@@ -1285,6 +1350,9 @@ function wire() {
   tick();
   applyWakeLock();
   refreshDiagnostics();
+  // Deliberately not awaited: which azan sound is available has no bearing on
+  // the board, and probing for it must never be what stops the board drawing.
+  loadAzanAudio().catch(() => {});
   if (!window.__AZAN_STANDALONE__ && 'serviceWorker' in navigator) {
     // updateViaCache:'none' stops the browser serving a cached worker, and the
     // reload below picks up a new one without anyone clearing site data.

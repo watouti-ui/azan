@@ -1365,6 +1365,7 @@ top. Only one `.view` carries `.on` at a time.
 | localStorage | `azan.settings` | the settings object below |
 | localStorage | `azan.timetable` | a full `{meta, days}` object — an imported timetable, which overrides the bundled file |
 | localStorage | `azan.fired` | `{ date: 'YYYY-MM-DD', keys: string[] }` |
+| localStorage | `azan.lastGood` | the last `{meta, days}` that loaded cleanly — the offline fallback of last resort (§12.3) |
 | localStorage | `azan.push` | `{ endpoint, prefs, at }` — what was last registered with the alert server. **Only when the §13 option is built.** |
 | IndexedDB | `azan-db` v1 → store `files` → key `azan` | the user's azan audio `Blob` |
 
@@ -1429,41 +1430,136 @@ Relative paths (`./`) throughout, so the app works from a sub-path such as
 Icons: the masjid mark from §6.10 on the sand background. The maskable variant
 needs the mark at ~60% of the canvas so it survives a circular mask.
 
-## 12.2 Service worker
+## 12.2 Service worker — offline strategy
 
-Cache name carries the version: `azan-v2.1.0`. **Bump it on every release** or
+Cache name carries the version: `azan-v2.2.0`. **Bump it on every release** or
 clients keep the old build.
 
 Precache list: `./`, `./index.html`, `./app.js` (or the hashed Vite bundles),
-`./manifest.webmanifest`, `./data/timetable.json`, and the three icons.
+`./manifest.webmanifest`, `./data/timetable.json`, and the three icons. That is
+the complete set — the app has **no external dependencies at all**: no CDN, no
+Google Fonts, no analytics. Keep it that way; a single external stylesheet
+would make the app's startup depend on someone else's uptime.
 
-Strategy — **network-first with a cache fallback**:
+### Two strategies, split by what freshness is worth
+
+| Requests | Strategy | Why |
+|---|---|---|
+| The static shell (`./`, `index.html`, `app.js`, manifest, icons) | **cache-first, revalidate in the background** | A cached copy is the right copy for this load. The shell cannot go stale *without the cache name changing with it*, and a new deploy lands through the worker-update path (§12.4), not through per-asset revalidation. |
+| Everything else — above all `data/timetable.json` | **network-first, with a 1500 ms timeout** | A corrected timetable should land on *this* load, not the next one. The timeout is what stops a dead connection turning that preference into a stall. |
 
 ```js
+const NET_TIMEOUT_MS = 1500;
+const SHELL = ['/', '/index.html', '/app.js', '/manifest.webmanifest',
+               '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png'];
+const isShell = url => {
+  const path = new URL(url).pathname;
+  return SHELL.some(sfx => path === sfx || path.endsWith(sfx));
+};
+
+async function respond(event) {
+  const req = event.request;
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(req);
+
+  const network = fetch(req).then(res => {
+    if (res && res.ok) cache.put(req, res.clone()).catch(() => {});  // never cache a 404
+    return res;
+  });
+
+  if (!cached) {
+    try { const res = await network; if (res) return res; } catch (e) {}
+    // Only a navigation falls back to the shell. Handing index.html to a
+    // request for timetable.json just defers the failure to a JSON parse error.
+    if (req.mode === 'navigate') {
+      const shell = await cache.match('./index.html');
+      if (shell) return shell;
+    }
+    return new Response('', { status: 504, statusText: 'Offline' });
+  }
+
+  if (isShell(req.url)) {                 // instant, refresh for next time
+    event.waitUntil(network.catch(() => {}));
+    return cached;
+  }
+
+  const raced = await Promise.race([      // network preferred, but bounded
+    network.catch(() => null),
+    new Promise(r => setTimeout(() => r(null), NET_TIMEOUT_MS)),
+  ]);
+  if (raced && raced.ok) return raced;
+  event.waitUntil(network.catch(() => {}));
+  return cached;
+}
+
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-  event.respondWith(
-    fetch(req)
-      .then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
-        return res;
-      })
-      .catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
-  );
+  event.respondWith(respond(event));
 });
 ```
 
-Cache-first was tried and rejected: users repeatedly saw stale builds and had
-to clear site data. For an app whose entire value is correct times, a stale
-cache is a correctness bug.
+### Why the timeout is not optional
+
+**`fetch()` only rejects when a connection *fails*. A connection that is
+present but dead — one bar of signal, a captive portal, a hung TCP socket —
+never rejects, it hangs.** Plain network-first therefore waits on the browser's
+own timeout before it ever reaches the cache fallback.
+
+Measured on the reference build, with a warm cache and every request hanging:
+
+| | Before | After |
+|---|---|---|
+| Fully offline, cold start | 55 ms (always worked) | **41–53 ms** |
+| Live-but-dead connection | **never started** — >45 s, zero rows rendered | **1.6 s** to all six rows |
+
+Fully offline was never the problem. The case *between* online and offline was,
+and it is the one that actually happens to a phone inside a building.
 
 `install` → `cache.addAll(ASSETS)` then `skipWaiting()` (and `skipWaiting()`
 even on failure). `activate` → delete every cache whose name is not `CACHE`,
 then `clients.claim()`.
 
-## 12.3 Update strategy — all three parts are required
+Pure cache-first for *everything* was tried and rejected: users repeatedly saw
+stale builds and had to clear site data. The split above keeps that fix — data
+still prefers the network — while refusing to pay three sequential timeouts for
+the shell.
+
+## 12.3 Offline resilience in the app, not just the worker
+
+The worker is not the only path to the timetable, so the app carries its own
+guards:
+
+1. **Boot never waits on the network.** The `data/timetable.json` fetch gets an
+   `AbortController` deadline of 4000 ms. This covers the case the worker
+   cannot: a first visit that goes offline before any worker has taken control,
+   or a browser with service workers unavailable.
+2. **Last-known-good copy.** Every timetable that loads cleanly is written to
+   `azan.lastGood` (§11). If the fetch fails *and* the cache misses, the app
+   falls back to that copy before it ever shows the sample-data placeholder.
+   Showing real times from last week beats showing "do not pray by these times".
+3. **A timetable is only accepted if it carries days.** An empty `{days:{}}`
+   would render every date as "No times", which reads as data loss rather than
+   a failed load. Guard with `usable(tt)`.
+4. **Nothing optional may block the first paint.** In particular the probe for
+   `audio/azan.mp3` is a **HEAD** request, and HEAD **bypasses the service
+   worker entirely** (`req.method !== 'GET'` returns early), so it always goes
+   to the network. In the reference build this single probe — for a file that
+   does not even exist — hung `boot()` indefinitely on a dead connection, with
+   everything else already cached. It now has its own 2500 ms deadline **and**
+   is not awaited during boot:
+
+```ts
+// Deliberately not awaited: which azan sound is available has no bearing on
+// the board, and probing for it must never be what stops the board drawing.
+loadAzanAudio().catch(() => {});
+```
+
+Treat point 4 as the general rule: **anything on the boot path that touches the
+network must have a deadline, and anything the board does not need must not be
+on the boot path at all.**
+
+## 12.4 Update strategy — all three parts are required
 
 ```ts
 navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
@@ -1488,7 +1584,7 @@ repeatedly during development.
 
 Skip service-worker registration entirely in a single-file build.
 
-## 12.4 Push handlers
+## 12.5 Push handlers
 
 Include them now even though no backend exists — they are the app half of the
 contract, and they are what the test path uses. If the §13 option is built,
@@ -1777,7 +1873,7 @@ Passing the raw string instead will throw `InvalidCharacterError`.
 
 ### Subscription rotation
 The service worker already relays `pushsubscriptionchange` to open pages
-(§12.4). On receiving that message the page must re-subscribe and re-register,
+(§12.5). On receiving that message the page must re-subscribe and re-register,
 then replace `azan.push`. Browsers rotate subscriptions without warning; an
 app that ignores this stops receiving alerts weeks later with no error.
 
@@ -1835,7 +1931,7 @@ silent failure here looks exactly like "push doesn't work on my phone".
 
 ## 13.10 Payload contract
 
-Extends the shape in §12.4. The `push` handler there already consumes
+Extends the shape in §12.5. The `push` handler there already consumes
 `title`, `body`, `tag`, `at`, `key` and `url`; add `kind` and `fireId`.
 
 ```jsonc
@@ -1886,7 +1982,7 @@ With push active, both the server and the open page can alert for the same
 event. Resolve it with one rule: **when push is active, push owns the
 notification; the page owns the audio and the in-app banner.**
 
-Service worker (`push` handler, in addition to §12.4):
+Service worker (`push` handler, in addition to §12.5):
 
 ```js
 // Tell any open page what just arrived so it can play audio and
@@ -2118,7 +2214,38 @@ Step a full simulated day minute by minute and assert:
   `Tomorrow`;
 - the countdown is never negative and never jumps backwards.
 
-## 14.6 Data validation (CI)
+## 14.6 Offline
+
+Offline is a correctness requirement here, not a nicety: the app's whole job is
+to be readable in a building with no signal. Test all five, and test 3 and 4
+specifically — they are the ones that fail while 1 and 2 pass.
+
+| # | Scenario | Requirement |
+|---|---|---|
+| 1 | Load once online, then reload with the network **off** | Board renders with the correct times for the date; no page errors; the sample-data banner does **not** appear |
+| 2 | **Cold start** offline — a brand-new tab, network off, worker already installed | Board renders in well under a second; rows byte-identical to the online render; day count still 61 |
+| 3 | **Live-but-dead connection** — every request hangs rather than failing | Board shows all six rows within ~2 s. This is the realistic phone case and the one plain network-first fails: `fetch` never rejects, so the cache fallback never runs |
+| 4 | Dead connection with **no bundled `audio/azan.mp3`** | Board still renders. A HEAD probe bypasses the service worker, so an optional audio check must never be awaited on the boot path (§12.3) |
+| 5 | Online, `data/timetable.json` changed on the server | The **new** value appears on the next reload — the offline work must not have cost data freshness |
+
+Automate 1–3 with Playwright: `context.setOffline(true)` for 1 and 2, and for 3
+a route handler that delays rather than aborts:
+
+```js
+await ctx.route('**/*', async route => {
+  await new Promise(r => setTimeout(r, 60000));   // hang, do not fail
+  route.abort();
+});
+```
+
+Prime the worker in a throwaway page before each test page, or the worker claims
+clients mid-test and the app's own `controllerchange` reload (§12.4 — correct
+behaviour) destroys the execution context under the assertions.
+
+Reference-build results: offline cold start **41–53 ms**; dead connection
+**1.6 s** (was: never started, >45 s with zero rows).
+
+## 14.7 Data validation (CI)
 
 A script that fails the build when, for every day in the timetable:
 - the key matches `^\d{2}-\d{2}$` and every time matches `^[0-2]\d:[0-5]\d$`;
@@ -2230,7 +2357,7 @@ client-only build. Everything below is wasted if it cannot be packaged.
 | 1 | Project shell: Vite + React + TS + Tailwind, `color-scheme: light`, no dark mode, no router, a single full-viewport `100svh` page with `overflow:hidden`. | Nothing scrolls; no shadcn chrome on the page. |
 | 2 | `src/engine/time.ts` with §4.2–4.6 verbatim, plus unit tests for `epochOf` across 25 Oct 2026 and for `inSummerTime` on 9 Oct vs 30 Oct. | Tests green. |
 | 3 | `src/engine/hijri.ts` (§5) with tests against the six anchors in §5.3. | Tests green. |
-| 4 | Drop in `public/data/timetable.json` (the real 61 days) and `src/engine/timetable.ts` (`dayEntry`, `minutesFor`, `eventsFor`, `hasJamaah`). | §14.6 validator passes. |
+| 4 | Drop in `public/data/timetable.json` (the real 61 days) and `src/engine/timetable.ts` (`dayEntry`, `minutesFor`, `eventsFor`, `hasJamaah`). | §14.7 validator passes. |
 | 5 | `src/engine/countdown.ts` (§7.1, §7.2) with the §14.5 sweep as a test. | Sweep green. |
 | 6 | The board: structure (§6.2) and `board.css` (§6.4, §6.5) — static, no behaviour. | §14.3 layout numbers hit at all four widths. |
 | 7 | The mat SVG generator (§6.3) with its ResizeObserver. | Rendered SVG width == container width; dome undistorted at 320 px and 430 px. |
@@ -2239,6 +2366,7 @@ client-only build. Everything below is wasted if it cannot be packaged.
 | 10 | Settings screen (§10) and persistence (§11). | Reload keeps every setting; offsets move adhan only. |
 | 11 | Notifications, sound, dedupe, in-app banner, diagnostics (§9). | §14.4, all seven cases — **on a published URL, not the preview iframe**. |
 | 12 | PWA: manifest, icons, custom service worker, update strategy (§12). | Installs to a phone home screen; a redeploy is picked up without clearing site data. |
+| 12b | Offline: the shell/data strategy split (§12.2) and the app-side guards (§12.3). | **§14.6, all five cases.** Case 3 (hanging connection) is the one that fails while everything else passes. |
 
 **Stop here and ship.** Steps 1–12 are the whole product for a mosque that is
 content with foreground alerts, and everything above is verifiable without a
@@ -2521,7 +2649,7 @@ npx cap open android   # then Generate Signed Bundle in Android Studio
 
 `npx cap sync` after **every** web change. Forgetting it means the native app
 silently runs the previous build — the native equivalent of the stale-cache
-problem that §12.3 exists to prevent.
+problem that §12.4 exists to prevent.
 
 Keep three version numbers in step on every release, and say so in the release
 checklist: `APP_VERSION` in the web code, `CFBundleShortVersionString` +
@@ -2548,11 +2676,11 @@ The try/catch discipline in §11 stays: native calls are async and can still fai
 Do **not** register the service worker when running natively. A WebView
 serving from a local scheme with a network-first service worker in front of it
 produces double caching, pointless network attempts offline, and a
-`controllerchange` reload loop from §12.3.
+`controllerchange` reload loop from §12.4.
 
 ```ts
 if (!Capacitor.isNativePlatform() && 'serviceWorker' in navigator) {
-  /* the whole of §12.3 */
+  /* the whole of §12.4 */
 }
 ```
 
@@ -3084,7 +3212,7 @@ Implementation:
 3. On app start, and at most once a day, fetch it with a short timeout.
    **Never block the board on this** — the board renders from the bundled or
    cached copy immediately.
-4. **Validate before accepting**, using §14.6's rules exactly: key format,
+4. **Validate before accepting**, using §14.7's rules exactly: key format,
    time format, prayer ordering, iqamah gaps within 0–120 minutes. A malformed
    or truncated download must be discarded, not displayed. A prayer app that
    renders corrupt times is worse than one that is out of date.
@@ -3125,7 +3253,7 @@ When the mosque issues a new sheet:
 
 1. Transcribe it into `tools/tables/YYYY-MM.txt` (§3.4).
 2. Run the build script; bump `meta.revision`.
-3. Run the §14.6 validator — it must report 0 issues.
+3. Run the §14.7 validator — it must report 0 issues.
 4. Spot-check the new month against the printed sheet, including the first and
    last day and any clock change.
 5. Deploy the JSON. Devices pick it up within a day (§25.2) and reschedule
